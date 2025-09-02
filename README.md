@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Final Production
+# Options Trading Bot (Angel One) - Final Production (Fixed Dependencies)
 
 ## Features
 - Uses official Angel One SmartApi (no stubs)
