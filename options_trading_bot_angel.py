@@ -4,6 +4,7 @@ from SmartApi import SmartConnect
 import pyotp
 import datetime as dt
 import os
+import requests
 
 # ------------------------- Utility Functions -------------------------
 
@@ -16,9 +17,11 @@ def fetch_instruments(api):
         elif hasattr(api, "get_exchange_instruments"):
             response = api.get_exchange_instruments("NFO")
         else:
-            raise AttributeError("SmartConnect has no instruments method available")
+            # Fallback: download scrip master JSON directly
+            url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+            response = requests.get(url).json()
 
-        # Handle both dict-with-data and direct list responses
+        # Handle formats
         if isinstance(response, dict) and "data" in response:
             all_instruments = response["data"]
         elif isinstance(response, list):
