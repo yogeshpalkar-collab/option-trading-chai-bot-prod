@@ -1,21 +1,10 @@
 import streamlit as st
 import pandas as pd
-import os
-import datetime as dt
-import subprocess
-
-# --- Runtime self-healing for SmartAPI ---
-try:
-    st.write("🔧 Environment check: Ensuring smartapi-python==1.5.5 is installed...")
-    subprocess.run(["pip", "uninstall", "-y", "SmartAPI", "smartapi-python"], capture_output=True)
-    subprocess.run(["pip", "install", "--no-cache-dir", "smartapi-python==1.5.5"], capture_output=True)
-    st.write("✅ smartapi-python==1.5.5 installed successfully.")
-except Exception as e:
-    st.error(f"Failed to self-heal SmartAPI package: {e}")
-
-import pkg_resources
 from SmartApi import SmartConnect
 import pyotp
+import datetime as dt
+import os
+import pkg_resources
 
 API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -33,12 +22,8 @@ def get_smartapi_package_info():
     try:
         version = pkg_resources.get_distribution("smartapi-python").version
         return f"📦 SmartAPI Package: smartapi-python (v{version})"
-    except:
-        try:
-            version = pkg_resources.get_distribution("SmartAPI").version
-            return f"📦 SmartAPI Package: SmartAPI (WRONG package, v{version})"
-        except:
-            return "📦 SmartAPI Package: ❌ Not Found"
+    except Exception as e:
+        return f"📦 SmartAPI Package check failed: {e}"
 
 def login_smartapi():
     try:
@@ -57,70 +42,50 @@ def refresh_instruments(smartApi):
     global instrument_source, instrument_last_updated
     today = dt.date.today().strftime("%Y%m%d")
     csv_file = f"instruments_{today}.csv"
+
+    # Try loading today's CSV first
     if os.path.exists(csv_file):
         instrument_source = f"🟡 Instruments loaded from today's CSV ({csv_file})"
         instrument_last_updated = dt.datetime.fromtimestamp(os.path.getmtime(csv_file)).strftime("%Y-%m-%d %H:%M:%S")
         return pd.read_csv(csv_file)
 
+    # Fetch from API (no stubs, no fake fallbacks)
     try:
-        if hasattr(smartApi, "get_instrument_master"):
-            instruments = smartApi.get_instrument_master()
-        elif hasattr(smartApi, "getInstruments"):
-            instruments = smartApi.getInstruments()
-        else:
-            st.error("⚠️ SmartAPI version mismatch — please reinstall smartapi-python==1.5.5")
-            instrument_source = "❌ Instruments not available (SmartAPI mismatch)"
-            instrument_last_updated = None
-            return None
-
+        instruments = smartApi.get_instrument_master()
         df = pd.DataFrame(instruments)
+        if df.empty:
+            st.error("❌ Angel API returned no instruments.")
+            return None
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
         instrument_last_updated = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return df
     except Exception as e:
-        st.warning(f"API instrument fetch failed: {e}. Trying last CSV fallback...")
-        try:
-            files = [f for f in os.listdir('.') if f.startswith("instruments_") and f.endswith(".csv")]
-            if files:
-                latest = sorted(files)[-1]
-                instrument_source = f"🔴 API failed, instruments loaded from fallback CSV ({latest})"
-                instrument_last_updated = dt.datetime.fromtimestamp(os.path.getmtime(latest)).strftime("%Y-%m-%d %H:%M:%S")
-                return pd.read_csv(latest)
-            else:
-                st.error("No instruments CSV available.")
-                instrument_source = "❌ Instruments not available"
-                instrument_last_updated = None
-                return None
-        except Exception as e2:
-            st.error(f"Failed to load instruments from fallback CSV: {e2}")
-            instrument_source = "❌ Instruments not available"
-            instrument_last_updated = None
-            return None
+        st.error(f"Instrument fetch failed: {e}")
+        return None
 
 def get_expiry_dropdown(instruments):
     try:
         nifty_opts = instruments[(instruments["name"] == "NIFTY") & (instruments["instrumenttype"] == "OPTIDX")]
         expiries = sorted(nifty_opts["expiry"].unique())
-        current_month = dt.date.today().month
-        current_expiries = [e for e in expiries if pd.to_datetime(e).month == current_month]
-        if not current_expiries:
-            current_expiries = expiries
+        if not expiries:
+            st.error("No NIFTY option expiries found in instruments.")
+            return None
 
         today = dt.date.today()
         weekly_candidates = []
-        for e in current_expiries:
+        for e in expiries:
             e_date = pd.to_datetime(e).date()
             if e_date.weekday() == 1 and e_date >= today:
                 weekly_candidates.append(e_date)
 
         if weekly_candidates:
             nearest_weekly = min(weekly_candidates)
-            default_index = current_expiries.index(str(nearest_weekly))
+            default_index = expiries.index(str(nearest_weekly))
         else:
             default_index = 0
 
-        selected = st.sidebar.selectbox("Select Expiry", current_expiries, index=default_index)
+        selected = st.sidebar.selectbox("Select Expiry", expiries, index=default_index)
         return selected
     except Exception as e:
         st.error(f"Error building expiry dropdown: {e}")
@@ -149,7 +114,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean Version")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
@@ -170,7 +135,6 @@ def main():
     update_trade_engine_status(market_open)
     st.info(trade_engine_status)
 
-    # Show SmartAPI package/version info
     st.info(get_smartapi_package_info())
 
     smartApi = login_smartapi()

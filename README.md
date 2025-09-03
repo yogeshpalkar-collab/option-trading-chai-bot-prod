@@ -1,7 +1,7 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Runtime Self-Healing)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Clean Version
 
 ## Overview
-Final production version with:
+Final clean production version with:
 - Real-time NIFTY feed via Angel One SmartAPI WebSocket.
 - Full bias logic: EMA(9/21), VWAP, CPR (relaxed for reversals), ATR, OI Change.
 - Trade engine:
@@ -11,14 +11,11 @@ Final production version with:
   - Target Relax Mode (capture >10 profit if price spikes)
   - Max 3 trades/day, no repeat strike, no trades after 3PM
 - Paper mode (default) and Live mode behave identically.
-- ✅ Instruments auto-refresh daily with API and CSV fallback.
+- ✅ Instruments fetched only via Angel API (no stubs, no fake fallbacks).
+- ✅ Expiry dropdown built only from real NIFTY option expiries.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
-- ✅ Expiry dropdown with nearest Tuesday weekly auto-selected (fallback to monthly).
-- ✅ SmartAPI support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
-- ✅ Explicit error if neither method exists: **SmartAPI version mismatch**.
-- ✅ NEW: SmartAPI package/version diagnostic banner.
-- ✅ NEW: Runtime self-healing — bot uninstalls wrong SmartAPI packages and reinstalls correct one at launch.
+- ✅ SmartAPI diagnostic banner to show exact installed package & version.
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -32,9 +29,8 @@ Final production version with:
    ```bash
    pip uninstall -y SmartAPI smartapi-python && pip install --no-cache-dir smartapi-python==1.5.5 && pip install -r requirements.txt
    ```
-   This guarantees removal of wrong SmartAPI packages and clean install of correct one.
 4. In **Start Command**, set:
    ```bash
    streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
    ```
-5. Deploy. On first startup, bot also runs a runtime self-healing step to confirm `smartapi-python==1.5.5` is installed.
+5. Deploy. Default mode starts as Paper Trading.
