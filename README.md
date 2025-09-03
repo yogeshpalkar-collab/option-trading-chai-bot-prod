@@ -5,6 +5,7 @@
 - Master password protection (via environment variable MASTER_PASSWORD)
 - Environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD
 - Paper/Live trading toggle (default = Paper)
+- Both Paper and Live modes fetch **only NIFTY option instruments** for consistent behaviour
 - Expiry dropdown, 4 lots per trade, dynamic lot size
 - SL = ATR(14) + 10 points, Trailing SL, Target = 10 points
 - Max 3 trades/day, no repeat strike, no trades after 3 PM
@@ -44,5 +45,6 @@
 
 ## ✅ Notes
 - Default mode = Paper Trading
-- Live mode requires valid Angel One credentials
+- Live mode behaves the same as Paper in terms of fetching instruments
+- Fetches only **NIFTY option instruments** instead of all 60,000
 - No stubs, full production-ready SmartAPI integration

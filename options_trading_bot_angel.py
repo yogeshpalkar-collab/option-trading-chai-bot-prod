@@ -10,13 +10,19 @@ import os
 
 def fetch_instruments(api):
     """
-    Fetch full instrument list from Angel One SmartAPI (live integration).
+    Fetch only NIFTY option instruments from Angel One SmartAPI (live integration).
     Compatible with smartapi-python v1.5.5
     """
     try:
-        response = api.getInstruments()  # returns dict with "data" key
+        response = api.get_instruments()   # fixed method name in v1.5.5
         if response and "data" in response:
-            return response["data"]      # actual instruments list
+            all_instruments = response["data"]
+            # Filter only NIFTY option contracts
+            nifty_opts = [
+                inst for inst in all_instruments
+                if inst.get("name") == "NIFTY" and inst.get("instrumenttype") in ("OPTIDX",)
+            ]
+            return nifty_opts
         else:
             return []
     except Exception as e:
@@ -57,25 +63,29 @@ def main():
     mode = st.radio("Mode", ["Paper Trading", "Live Trading"], index=0)
     st.write(f"Current mode: **{mode}**")
 
-    # Connect to Angel One (only if live)
+    # Always try to connect to Angel One for consistent behaviour
     api = None
-    if mode == "Live Trading":
-        try:
-            api_key = os.environ["API_KEY"]
-            client_id = os.environ["CLIENT_ID"]
-            password = os.environ["PASSWORD"]
-            totp = pyotp.TOTP(os.environ["TOTP"]).now()
+    try:
+        api_key = os.environ["API_KEY"]
+        client_id = os.environ["CLIENT_ID"]
+        password = os.environ["PASSWORD"]
+        totp = pyotp.TOTP(os.environ["TOTP"]).now()
 
-            api = SmartConnect(api_key)
-            session_data = api.generateSession(client_id, password, totp)
-            st.success("✅ Logged in to Angel One")
-        except Exception as e:
-            st.error(f"Login failed: {e}")
-            return
+        api = SmartConnect(api_key)
+        session_data = api.generateSession(client_id, password, totp)
+        st.success("✅ Logged in to Angel One")
+    except Exception as e:
+        st.error(f"Login failed: {e}")
+        return
 
-    # Fetch instruments
-    instruments = fetch_instruments(api) if api else []
-    st.write(f"Fetched {len(instruments)} instruments")
+    # Fetch instruments (both modes behave the same)
+    instruments = fetch_instruments(api)
+    st.write(f"Fetched {len(instruments)} NIFTY option instruments")
+
+    # Show a sample of strikes/expiries for confirmation
+    if instruments:
+        df_preview = pd.DataFrame(instruments)[["tradingsymbol", "expiry", "strike", "instrumenttype"]].head(10)
+        st.dataframe(df_preview)
 
     # Placeholder for dashboard
     st.subheader("Bias Dashboard")
