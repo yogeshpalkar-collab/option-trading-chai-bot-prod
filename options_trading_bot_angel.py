@@ -4,6 +4,7 @@ from SmartApi import SmartConnect
 import pyotp
 import datetime as dt
 import os
+import pkg_resources
 
 API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -16,6 +17,17 @@ trade_engine_status = "❌ Disabled"
 instrument_source = None
 instrument_last_updated = None
 selected_expiry = None
+
+def get_smartapi_package_info():
+    try:
+        version = pkg_resources.get_distribution("smartapi-python").version
+        return f"📦 SmartAPI Package: smartapi-python (v{version})"
+    except:
+        try:
+            version = pkg_resources.get_distribution("SmartAPI").version
+            return f"📦 SmartAPI Package: SmartAPI (WRONG package, v{version})"
+        except:
+            return "📦 SmartAPI Package: ❌ Not Found"
 
 def login_smartapi():
     try:
@@ -146,6 +158,9 @@ def main():
 
     update_trade_engine_status(market_open)
     st.info(trade_engine_status)
+
+    # Show SmartAPI package/version info
+    st.info(get_smartapi_package_info())
 
     smartApi = login_smartapi()
     if smartApi is None:
