@@ -73,7 +73,7 @@ def refresh_instruments():
 def get_expiry_dropdown(instruments):
     try:
         nifty_opts = instruments[(instruments["name"] == "NIFTY") & (instruments["instrumenttype"] == "OPTIDX")]
-        expiries = sorted(nifty_opts["expiry"].unique())
+        expiries = sorted(pd.to_datetime(nifty_opts["expiry"]).dt.strftime("%Y-%m-%d").unique())
         if not expiries:
             st.error("No NIFTY option expiries found in instruments.")
             return None
@@ -87,7 +87,11 @@ def get_expiry_dropdown(instruments):
 
         if weekly_candidates:
             nearest_weekly = min(weekly_candidates)
-            default_index = expiries.index(str(nearest_weekly))
+            nearest_weekly_str = nearest_weekly.strftime("%Y-%m-%d")
+            if nearest_weekly_str in expiries:
+                default_index = expiries.index(nearest_weekly_str)
+            else:
+                default_index = 0
         else:
             default_index = 0
 
@@ -120,7 +124,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean JSON Fetch")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean JSON Fetch + Safe Expiry Fallback")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 

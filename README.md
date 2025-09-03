@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Clean (JSON Fetch)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Clean (JSON Fetch + Safe Expiry Fallback)
 
 ## Overview
 Final clean production version with:
@@ -12,7 +12,7 @@ Final clean production version with:
   - Max 3 trades/day, no repeat strike, no trades after 3PM
 - Paper mode (default) and Live mode behave identically.
 - ✅ Instruments fetched directly from Angel's JSON endpoint (`OpenAPIScripMaster.json`).
-- ✅ Expiry dropdown built only from real NIFTY option expiries.
+- ✅ Expiry dropdown normalized to "YYYY-MM-DD" with safe fallback (no crashes).
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
 - ✅ SmartAPI diagnostic banner to show exact installed package & version.
