@@ -1,50 +1,17 @@
-# Secured Options Trading Bot v3 (Render, Production, os.environ)
+# Secured Options Trading Bot v3 (Render, Production, Auto-Refresh, Max Loss & Max Profit, Summary Panel)
 
 ## 🚀 Features
-- Real Angel One SmartAPI v1.5.5 integration (no stubs)
-- Master password protection (via environment variable MASTER_PASSWORD)
-- Environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD
-- Paper/Live trading toggle (default = Paper)
-- Both Paper and Live modes fetch **only NIFTY option instruments** for consistent behaviour
-- Expiry dropdown, 4 lots per trade, dynamic lot size
-- SL = ATR(14) + 10 points, Trailing SL, Target = 10 points
-- Max 3 trades/day, no repeat strike, no trades after 3 PM
-- Bias dashboard (EMA, VWAP, CPR, ATR)
-- Trade log table with CPR status, P&L in ₹, Order ID for live trades
+- Expiry dropdown + ATM detection
+- Bias Dashboard (EMA, VWAP, CPR, ATR, OI Change)
+- Auto CE/PE selection & trade execution
+- Unified Paper/Live behaviour
+- Risk rules: 4 lots, ATR+10 SL, Target=10, TSL, 3 trades/day, no repeat strike, no trades after 3 PM
+- Trade log with **live TSL updates**
+- Auto-refresh every 5 seconds for live updates
+- 🚫 Hard-coded Max Daily Loss = –₹8,000 (trading halted after breach)
+- ✅ Hard-coded Max Daily Profit = +₹15,000 (trading halted after hit)
+- 📊 **Summary Panel**: shows P&L, trades taken, remaining slots, and status (Active/Halted)
 
-## 🛠 Setup (Local)
-1. Clone repo and install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Set environment variables:
-   ```bash
-   export API_KEY="your_api_key"
-   export CLIENT_ID="your_client_id"
-   export PASSWORD="your_password"
-   export TOTP="your_totp_secret"
-   export MASTER_PASSWORD="your_master_password"
-   ```
-3. Run:
-   ```bash
-   streamlit run options_trading_bot_angel.py
-   ```
-
-## ☁️ Deployment (Render)
-1. Push repo to GitHub
-2. Create new Render Web Service
-3. Set build command:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Set run command:
-   ```bash
-   streamlit run options_trading_bot_angel.py --server.port $PORT --server.address 0.0.0.0
-   ```
-5. Add environment variables in Render Dashboard (API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD)
-
-## ✅ Notes
-- Default mode = Paper Trading
-- Live mode behaves the same as Paper in terms of fetching instruments
-- Fetches only **NIFTY option instruments** instead of all 60,000
-- No stubs, full production-ready SmartAPI integration
+## Notes
+- Paper mode logs simulated Order IDs (`SIM-xxxx`)
+- Live mode logs real Angel One Order IDs
