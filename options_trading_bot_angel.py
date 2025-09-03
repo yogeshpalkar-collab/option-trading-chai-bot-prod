@@ -13,13 +13,14 @@ API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
 PASSWORD = os.getenv("PASSWORD")
 TOTP = os.getenv("TOTP")
+MASTER_PASSWORD = os.getenv("MASTER_PASSWORD")  # ✅ new environment variable for app access
 
 live_data = []
 oi_data = {"CE_OI": None, "PE_OI": None, "CE_OI_prev": None, "PE_OI_prev": None}
 trades = []
 trade_count = 0
 traded_strikes = set()
-mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)  # Default = Paper
+mode = None
 instrument_source = None
 instrument_last_updated = None
 trade_engine_status = "❌ Disabled"
@@ -47,7 +48,7 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
-        instruments = smartApi.get_instrument_master()  # ✅ only correct method used
+        instruments = smartApi.get_instrument_master()
         df = pd.DataFrame(instruments)
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
@@ -96,7 +97,23 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Clean Instruments)")
+    # Master Password Gate
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine")
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if not st.session_state["authenticated"]:
+        password_input = st.text_input("Enter Master Password", type="password")
+        if st.button("Unlock Bot"):
+            if password_input == MASTER_PASSWORD:
+                st.session_state["authenticated"] = True
+                st.success("Access granted. Bot unlocked.")
+            else:
+                st.error("Invalid password. Access denied.")
+        st.stop()
+
+    global mode
+    mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)  # Default = Paper
 
     # Market status banner
     status_msg, market_open = get_market_status()
@@ -125,3 +142,6 @@ def main():
         st.warning("Trade Engine is disabled. Bot will not place trades now.")
 
     # ... rest of main loop (bias calc, trade engine, log) ...
+
+if __name__ == "__main__":
+    main()

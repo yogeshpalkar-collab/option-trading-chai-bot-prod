@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Clean Instruments)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (with Master Password)
 
 ## Overview
 Final production version with:
@@ -13,7 +13,7 @@ Final production version with:
 - Paper mode (default) and Live mode behave identically.
 - ✅ Instruments auto-refresh daily with API and CSV fallback.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
-- ✅ Uses ONLY `get_instrument_master()` (no `getInstruments()` anywhere).
+- ✅ Master Password protection at app startup (set via `MASTER_PASSWORD` environment variable).
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -22,5 +22,5 @@ Final production version with:
 
 ## Deployment
 1. Upload all files to Render or Streamlit Cloud.
-2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP.
+2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD.
 3. Deploy. Default mode starts as Paper Trading.
