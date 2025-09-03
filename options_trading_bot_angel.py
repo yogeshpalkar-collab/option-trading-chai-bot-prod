@@ -55,7 +55,7 @@ def main():
     st.set_page_config(page_title="Options Trading Bot", layout="wide")
 
     # --- Fast /ping endpoint for uptime checks ---
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params
     if query_params.get("ping") == ["1"]:
         st.write("pong")
         return

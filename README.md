@@ -1,4 +1,4 @@
-# Secured Options Trading Bot v3 (Render, Persistent, Ultimate Wrapper, /ping Endpoint)
+# Secured Options Trading Bot v3 (Render, Persistent, Ultimate Wrapper, /ping Endpoint, Query Params Updated)
 
 ## 🚀 Features
 - Expiry dropdown + ATM detection (remembers selection across refreshes)
@@ -13,7 +13,8 @@
 - 📊 Summary panel (P&L, trades, status)
 - 🛠 Ultimate instruments wrapper (SmartApi methods + JSON fallback)
 - 🔒 Persistent Login & Expiry memory
-- ⚡ New: `/ping` endpoint for uptime monitors
+- ⚡ `/ping` endpoint for uptime monitors
+- ✅ Updated: uses `st.query_params` (no deprecation warning)
 
 ## 🛠 Ping Endpoint
 Use this URL for keep-alive pings:  
