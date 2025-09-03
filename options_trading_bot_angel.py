@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from smartapi import SmartConnect
+from SmartApi import SmartConnect
 import pyotp
 import datetime as dt
 import numpy as np
