@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Logzero + Clean Setup)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Logzero + Clean Setup + Uninstall Fix)
 
 ## Overview
 Final production version with:
@@ -28,9 +28,9 @@ Final production version with:
 2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD.
 3. In **Build Command**, paste this:
    ```bash
-   pip install --upgrade --force-reinstall smartapi-python==1.5.5 && pip install -r requirements.txt
+   pip uninstall -y SmartAPI smartapi-python && pip install smartapi-python==1.5.5 && pip install -r requirements.txt
    ```
-   This guarantees the correct SmartAPI version every time.
+   This guarantees removal of any wrong SmartAPI package and clean install of the correct version.
 4. In **Start Command**, set:
    ```bash
    streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
