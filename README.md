@@ -1,4 +1,4 @@
-# Secured Options Trading Bot v3 (Render, Summary Final, Ultimate Wrapper, Persistent Login/Expiry)
+# Secured Options Trading Bot v3 (Render, Persistent, Ultimate Wrapper, /ping Endpoint)
 
 ## 🚀 Features
 - Expiry dropdown + ATM detection (remembers selection across refreshes)
@@ -11,9 +11,13 @@
 - 🚫 Hard stop at –₹8,000/day
 - ✅ Lock-in at +₹15,000/day
 - 📊 Summary panel (P&L, trades, status)
-- 🛠 **Ultimate instruments wrapper** (SmartApi methods + JSON fallback)
-- 🔒 **Persistent Login** (no re-login on refresh)
-- 📆 **Persistent Expiry** (remembers expiry selection across refreshes)
+- 🛠 Ultimate instruments wrapper (SmartApi methods + JSON fallback)
+- 🔒 Persistent Login & Expiry memory
+- ⚡ New: `/ping` endpoint for uptime monitors
 
-## Notes
-- Dashboard and expiry selection no longer reset on auto-refresh
+## 🛠 Ping Endpoint
+Use this URL for keep-alive pings:  
+```
+https://options-trading-bot-angelv2.onrender.com/?ping=1
+```
+It responds with `pong` instantly without requiring login.
