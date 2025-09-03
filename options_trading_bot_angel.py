@@ -17,10 +17,11 @@ def login_angel(api_key, client_id, password, totp):
     return obj, session
 
 def fetch_instruments(api):
-    return pd.DataFrame(api.getInstruments("NFO"))
+    data = api.getInstruments()   # fixed: no arguments, returns full instrument dump
+    return pd.DataFrame(data)
 
 def get_month_expiries(instruments, symbol="NIFTY"):
-    df = instruments[instruments["name"] == symbol].copy()
+    df = instruments[(instruments["name"] == symbol) & (instruments["exch_seg"] == "NFO")].copy()
     df["expiry"] = pd.to_datetime(df["expiry"]).dt.date
     today = datetime.date.today()
     return sorted([e for e in df["expiry"].unique() if e >= today and e.month == today.month])
@@ -123,7 +124,6 @@ def main():
     st.caption(f"Reasons: {reasons}")
     st.caption(f"CPR Status: {cpr_status}")
 
-    # Placeholder trade execution
     if st.button("Execute Trade"):
         signal = "GO CALL" if bias == "Bullish" else "GO PUT" if bias == "Bearish" else "NO GO"
         if signal != "NO GO":

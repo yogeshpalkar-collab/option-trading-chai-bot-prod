@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Final Production (Fixed Dependencies)
+# Options Trading Bot (Angel One) - Final Production (Instruments Fix)
 
 ## Features
 - Uses official Angel One SmartApi (no stubs)
@@ -14,6 +14,7 @@
 - Trade Log Table with P&L in ₹ and Order ID (for live trades)
 - No Simulate Trade button
 - Dynamic ATM Strike calculation using Angel LTP (nearest 50)
+- Fixed getInstruments() usage for compatibility with SmartApi v1.5.5
 
 ## Deployment (Render)
 - Build Command:
