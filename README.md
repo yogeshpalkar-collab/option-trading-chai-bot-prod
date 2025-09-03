@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Logzero + Diagnostic + Setuptools)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Runtime Self-Healing)
 
 ## Overview
 Final production version with:
@@ -17,8 +17,8 @@ Final production version with:
 - ✅ Expiry dropdown with nearest Tuesday weekly auto-selected (fallback to monthly).
 - ✅ SmartAPI support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
 - ✅ Explicit error if neither method exists: **SmartAPI version mismatch**.
-- ✅ NEW: SmartAPI package/version diagnostic banner shown on dashboard.
-- ✅ `setuptools` added to requirements to support `pkg_resources`.
+- ✅ NEW: SmartAPI package/version diagnostic banner.
+- ✅ NEW: Runtime self-healing — bot uninstalls wrong SmartAPI packages and reinstalls correct one at launch.
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -30,11 +30,11 @@ Final production version with:
 2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD.
 3. In **Build Command**, paste this:
    ```bash
-   pip uninstall -y SmartAPI smartapi-python && pip install smartapi-python==1.5.5 && pip install -r requirements.txt
+   pip uninstall -y SmartAPI smartapi-python && pip install --no-cache-dir smartapi-python==1.5.5 && pip install -r requirements.txt
    ```
-   This guarantees removal of any wrong SmartAPI package and clean install of the correct version.
+   This guarantees removal of wrong SmartAPI packages and clean install of correct one.
 4. In **Start Command**, set:
    ```bash
    streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
    ```
-5. Deploy. Default mode starts as Paper Trading.
+5. Deploy. On first startup, bot also runs a runtime self-healing step to confirm `smartapi-python==1.5.5` is installed.

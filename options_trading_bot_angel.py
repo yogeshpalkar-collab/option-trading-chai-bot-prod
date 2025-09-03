@@ -1,10 +1,21 @@
 import streamlit as st
 import pandas as pd
+import os
+import datetime as dt
+import subprocess
+
+# --- Runtime self-healing for SmartAPI ---
+try:
+    st.write("🔧 Environment check: Ensuring smartapi-python==1.5.5 is installed...")
+    subprocess.run(["pip", "uninstall", "-y", "SmartAPI", "smartapi-python"], capture_output=True)
+    subprocess.run(["pip", "install", "--no-cache-dir", "smartapi-python==1.5.5"], capture_output=True)
+    st.write("✅ smartapi-python==1.5.5 installed successfully.")
+except Exception as e:
+    st.error(f"Failed to self-heal SmartAPI package: {e}")
+
+import pkg_resources
 from SmartApi import SmartConnect
 import pyotp
-import datetime as dt
-import os
-import pkg_resources
 
 API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
