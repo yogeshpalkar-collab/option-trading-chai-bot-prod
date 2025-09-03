@@ -14,8 +14,8 @@ Final production version with:
 - ✅ Instruments auto-refresh daily with API and CSV fallback.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
-- ✅ Expiry dropdown restored with **nearest Tuesday weekly auto-selected** (fallback to monthly if no weekly found).
-- ✅ SmartAPI dual support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
+- ✅ Expiry dropdown with nearest Tuesday weekly auto-selected (fallback to monthly).
+- ✅ SmartAPI support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -25,4 +25,8 @@ Final production version with:
 ## Deployment
 1. Upload all files to Render or Streamlit Cloud.
 2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD.
-3. Deploy. Default mode starts as Paper Trading.
+3. Start command:
+   ```bash
+   streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
+   ```
+4. Default mode starts as Paper Trading.

@@ -1,12 +1,8 @@
 import streamlit as st
 import pandas as pd
 from SmartApi import SmartConnect
-from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 import pyotp
 import datetime as dt
-import logzero
-from logzero import logger
-import json
 import os
 
 API_KEY = os.getenv("API_KEY")
@@ -15,15 +11,10 @@ PASSWORD = os.getenv("PASSWORD")
 TOTP = os.getenv("TOTP")
 MASTER_PASSWORD = os.getenv("MASTER_PASSWORD")
 
-live_data = []
-oi_data = {"CE_OI": None, "PE_OI": None, "CE_OI_prev": None, "PE_OI_prev": None}
-trades = []
 trade_count = 0
-traded_strikes = set()
-mode = None
+trade_engine_status = "❌ Disabled"
 instrument_source = None
 instrument_last_updated = None
-trade_engine_status = "❌ Disabled"
 selected_expiry = None
 
 def login_smartapi():
@@ -49,7 +40,7 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
-        # ✅ Corrected order: try get_instrument_master() first, fallback to getInstruments()
+        # ✅ Corrected fallback order
         if hasattr(smartApi, "get_instrument_master"):
             instruments = smartApi.get_instrument_master()
         elif hasattr(smartApi, "getInstruments"):
@@ -90,12 +81,12 @@ def get_expiry_dropdown(instruments):
         if not current_expiries:
             current_expiries = expiries
 
-        # Find nearest Tuesday expiry >= today
+        # Nearest Tuesday expiry >= today
         today = dt.date.today()
         weekly_candidates = []
         for e in current_expiries:
             e_date = pd.to_datetime(e).date()
-            if e_date.weekday() == 1 and e_date >= today:  # Tuesday = 1
+            if e_date.weekday() == 1 and e_date >= today:
                 weekly_candidates.append(e_date)
 
         if weekly_candidates:
@@ -147,7 +138,7 @@ def main():
                 st.error("Invalid password. Access denied.")
         st.stop()
 
-    global mode, selected_expiry
+    global selected_expiry
     mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)
 
     status_msg, market_open = get_market_status()
@@ -177,7 +168,7 @@ def main():
     if "ENABLED" not in trade_engine_status:
         st.warning("Trade Engine is disabled. Bot will not place trades now.")
 
-    # ... rest of main loop (bias calc, trade engine, log) ...
+    # ... bias calc, trade engine, log ...
 
 if __name__ == "__main__":
     main()
