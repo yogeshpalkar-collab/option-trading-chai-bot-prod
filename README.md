@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (with Master Password + Smart Expiry Dropdown)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Corrected SmartAPI Fallback)
 
 ## Overview
 Final production version with:
@@ -13,9 +13,9 @@ Final production version with:
 - Paper mode (default) and Live mode behave identically.
 - ✅ Instruments auto-refresh daily with API and CSV fallback.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
-- ✅ Master Password protection at app startup (via `MASTER_PASSWORD` env variable).
+- ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
 - ✅ Expiry dropdown restored with **nearest Tuesday weekly auto-selected** (fallback to monthly if no weekly found).
-- ✅ Dual SmartAPI support (`get_instrument_master()` or `getInstruments()`).
+- ✅ SmartAPI dual support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
 
 ## Files
 - options_trading_bot_angel.py → bot script

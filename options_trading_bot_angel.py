@@ -49,10 +49,13 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
+        # ✅ Corrected order: try get_instrument_master() first, fallback to getInstruments()
         if hasattr(smartApi, "get_instrument_master"):
             instruments = smartApi.get_instrument_master()
-        else:
+        elif hasattr(smartApi, "getInstruments"):
             instruments = smartApi.getInstruments()
+        else:
+            raise AttributeError("Neither get_instrument_master nor getInstruments found in SmartAPI")
         df = pd.DataFrame(instruments)
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
@@ -99,7 +102,6 @@ def get_expiry_dropdown(instruments):
             nearest_weekly = min(weekly_candidates)
             default_index = current_expiries.index(str(nearest_weekly))
         else:
-            # fallback to first expiry (monthly)
             default_index = 0
 
         selected = st.sidebar.selectbox("Select Expiry", current_expiries, index=default_index)
@@ -112,7 +114,7 @@ def get_market_status():
     now = dt.datetime.now()
     market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
     market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-    if now.weekday() >= 5:  # Saturday/Sunday
+    if now.weekday() >= 5:
         return "🔴 Market CLOSED (Weekend)", False
     elif market_open <= now <= market_close:
         return f"🟢 Market OPEN (NSE: {now.strftime('%Y-%m-%d %H:%M:%S')})", True
@@ -131,7 +133,6 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    # Master Password Gate
     st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
@@ -147,13 +148,11 @@ def main():
         st.stop()
 
     global mode, selected_expiry
-    mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)  # Default = Paper
+    mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)
 
-    # Market status banner
     status_msg, market_open = get_market_status()
     st.info(status_msg)
 
-    # Trade engine status
     update_trade_engine_status(market_open)
     st.info(trade_engine_status)
 
@@ -165,14 +164,12 @@ def main():
     if instruments is None:
         st.stop()
 
-    # Show instrument source banner with timestamp
     if instrument_source:
         if instrument_last_updated:
             st.info(f"{instrument_source} | Last updated: {instrument_last_updated}")
         else:
             st.info(instrument_source)
 
-    # Expiry dropdown (nearest Tuesday weekly pre-selected)
     selected_expiry = get_expiry_dropdown(instruments)
     if not selected_expiry:
         st.stop()
