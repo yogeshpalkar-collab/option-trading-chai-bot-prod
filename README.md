@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (with Trade Engine Status Banner)
 
 ## Overview
 Final production version with:
@@ -11,6 +11,11 @@ Final production version with:
   - Target Relax Mode (capture >10 profit if price spikes)
   - Max 3 trades/day, no repeat strike, no trades after 3PM
 - Paper mode (default) and Live mode behave identically.
+- ✅ Instruments auto-refresh daily with API and CSV fallback.
+- ✅ Dashboard banners:
+  - Market Status (OPEN/CLOSED)
+  - Trade Engine Status (ENABLED/DISABLED with reason)
+  - Instrument Source + Timestamp
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -18,6 +23,6 @@ Final production version with:
 - README.md → this file
 
 ## Deployment
-1. Upload to Render or Streamlit Cloud.
+1. Upload all files to Render or Streamlit Cloud.
 2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP.
 3. Deploy. Default mode starts as Paper Trading.
