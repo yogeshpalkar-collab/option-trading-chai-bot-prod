@@ -47,7 +47,7 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
-        instruments = smartApi.get_instrument_master()
+        instruments = smartApi.get_instrument_master()  # ✅ only correct method used
         df = pd.DataFrame(instruments)
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
@@ -96,7 +96,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Clean Instruments)")
 
     # Market status banner
     status_msg, market_open = get_market_status()
