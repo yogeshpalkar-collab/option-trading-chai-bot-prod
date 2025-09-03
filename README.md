@@ -1,4 +1,4 @@
-# Secured Options Trading Bot v3 (Render, Summary Final, Safe Wrapper)
+# Secured Options Trading Bot v3 (Render, Summary Final, Triple-Safe Wrapper)
 
 ## 🚀 Features
 - Expiry dropdown + ATM detection
@@ -11,9 +11,12 @@
 - 🚫 Hard stop at –₹8,000/day
 - ✅ Lock-in at +₹15,000/day
 - 📊 Summary panel (P&L, trades, status)
-- 🛠 Universal safe wrapper for `get_instruments` vs `getInstruments`
+- 🛠 **Triple-safe wrapper** for instrument fetching:
+  - `get_instruments()`  
+  - `getInstruments()`  
+  - `get_exchange_instruments("NFO")`
 
 ## Notes
-- Works regardless of SmartApi build differences
+- Works across all SmartApi build variations
 - Paper mode logs simulated Order IDs (`SIM-xxxx`)
 - Live mode logs real Angel One Order IDs

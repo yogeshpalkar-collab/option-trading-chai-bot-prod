@@ -4,7 +4,6 @@ from SmartApi import SmartConnect
 import pyotp
 import datetime as dt
 import os
-import random
 
 # ------------------------- Utility Functions -------------------------
 
@@ -14,17 +13,24 @@ def fetch_instruments(api):
             response = api.get_instruments()
         elif hasattr(api, "getInstruments"):
             response = api.getInstruments()
+        elif hasattr(api, "get_exchange_instruments"):
+            response = api.get_exchange_instruments("NFO")
         else:
-            raise AttributeError("SmartConnect has no instruments method")
+            raise AttributeError("SmartConnect has no instruments method available")
 
-        if response and "data" in response:
+        # Handle both dict-with-data and direct list responses
+        if isinstance(response, dict) and "data" in response:
             all_instruments = response["data"]
-            nifty_opts = [
-                inst for inst in all_instruments
-                if inst.get("name") == "NIFTY" and inst.get("instrumenttype") == "OPTIDX"
-            ]
-            return nifty_opts
-        return []
+        elif isinstance(response, list):
+            all_instruments = response
+        else:
+            return []
+
+        nifty_opts = [
+            inst for inst in all_instruments
+            if inst.get("name") == "NIFTY" and inst.get("instrumenttype") == "OPTIDX"
+        ]
+        return nifty_opts
     except Exception as e:
         st.error(f"Error fetching instruments: {e}")
         return []
@@ -91,9 +97,10 @@ def main():
             st.success(f"NIFTY Spot: {spot} | ATM Strike: {atm_strike}")
 
             atm_instruments = [i for i in expiry_instruments if i.get("strike") == atm_strike]
-            df_atm = pd.DataFrame(atm_instruments)[["tradingsymbol", "expiry", "strike", "instrumenttype"]]
-            st.subheader("ATM CE/PE")
-            st.dataframe(df_atm)
+            if atm_instruments:
+                df_atm = pd.DataFrame(atm_instruments)[["tradingsymbol", "expiry", "strike", "instrumenttype"]]
+                st.subheader("ATM CE/PE")
+                st.dataframe(df_atm)
 
 if __name__ == "__main__":
     main()
