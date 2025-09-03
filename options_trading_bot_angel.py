@@ -17,11 +17,9 @@ def fetch_instruments(api):
         elif hasattr(api, "get_exchange_instruments"):
             response = api.get_exchange_instruments("NFO")
         else:
-            # Fallback: download scrip master JSON directly
             url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
             response = requests.get(url).json()
 
-        # Handle formats
         if isinstance(response, dict) and "data" in response:
             all_instruments = response["data"]
         elif isinstance(response, list):
@@ -57,41 +55,77 @@ def main():
     st.title("📈 Secured Options Trading Bot (Angel One, Render Version)")
     st.caption("Production-ready. Live Angel One SmartAPI integration.")
 
-    # Master password protection
+    # Persistent state
     if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    if "api" not in st.session_state:
+        st.session_state.api = None
+    if "trade_log" not in st.session_state:
+        st.session_state.trade_log = []
+    if "cum_pnl" not in st.session_state:
+        st.session_state.cum_pnl = 0
+    if "expiry" not in st.session_state:
+        st.session_state.expiry = None
+
+    # Login
+    if not st.session_state.authenticated:
         pwd = st.text_input("Enter Master Password", type="password")
         if st.button("Login"):
             if pwd == os.environ.get("MASTER_PASSWORD", "changeme"):
-                st.session_state.authenticated = True
-                st.success("Unlocked ✅")
+                try:
+                    api = SmartConnect(os.environ["API_KEY"])
+                    totp = pyotp.TOTP(os.environ["TOTP"]).now()
+                    api.generateSession(os.environ["CLIENT_ID"], os.environ["PASSWORD"], totp)
+                    st.session_state.authenticated = True
+                    st.session_state.api = api
+                    st.success("Unlocked ✅")
+                except Exception as e:
+                    st.error(f"Login failed: {e}")
+                    return
             else:
                 st.error("Invalid password ❌")
                 return
         else:
             return
+    else:
+        api = st.session_state.api
 
     mode = st.radio("Mode", ["Paper Trading", "Live Trading"], index=0)
     st.write(f"Current mode: **{mode}**")
 
-    # Connect to Angel One
-    try:
-        api_key = os.environ["API_KEY"]
-        client_id = os.environ["CLIENT_ID"]
-        password = os.environ["PASSWORD"]
-        totp = pyotp.TOTP(os.environ["TOTP"]).now()
-        api = SmartConnect(api_key)
-        api.generateSession(client_id, password, totp)
-        st.success("✅ Logged in to Angel One")
-    except Exception as e:
-        st.error(f"Login failed: {e}")
-        return
+    # Summary panel
+    trades_taken = len([t for t in st.session_state.trade_log if "Exit" in t["Action"]])
+    remaining_trades = max(0, 3 - trades_taken)
+    status = "🟢 Active"
+    if st.session_state.cum_pnl <= -8000:
+        status = "🔴 Halted (Max Daily Loss Reached)"
+    elif st.session_state.cum_pnl >= 15000:
+        status = "🔴 Halted (Max Daily Profit Reached)"
+    elif trades_taken >= 3:
+        status = "🔴 Halted (Max Trades Reached)"
 
+    st.subheader("📊 Today’s Summary")
+    st.write(f"**P&L:** ₹{st.session_state.cum_pnl:+}")
+    st.write(f"**Trades Taken:** {trades_taken}")
+    st.write(f"**Remaining Trades:** {remaining_trades}")
+    st.write(f"**Status:** {status}")
+
+    # Instruments & expiry
     instruments = fetch_instruments(api)
     st.write(f"Fetched {len(instruments)} NIFTY option instruments")
 
     if instruments:
         expiries = sorted(set(inst["expiry"] for inst in instruments))
-        selected_expiry = st.selectbox("Select Expiry", expiries, index=0)
+        if st.session_state.expiry not in expiries:
+            st.session_state.expiry = expiries[0]
+
+        selected_expiry = st.selectbox(
+            "Select Expiry",
+            expiries,
+            index=expiries.index(st.session_state.expiry),
+            key="expiry_select"
+        )
+        st.session_state.expiry = selected_expiry
         expiry_instruments = [i for i in instruments if i["expiry"] == selected_expiry]
 
         spot = fetch_nifty_spot(api)
@@ -104,6 +138,23 @@ def main():
                 df_atm = pd.DataFrame(atm_instruments)[["tradingsymbol", "expiry", "strike", "instrumenttype"]]
                 st.subheader("ATM CE/PE")
                 st.dataframe(df_atm)
+
+            # Bias dashboard (always visible)
+            st.subheader("Bias Dashboard")
+            st.info("Bias: Neutral (demo placeholder)")
+            st.write("- EMA check pending")
+            st.write("- VWAP check pending")
+            st.write("- CPR check pending")
+            st.write("- OI Change check pending")
+
+    # Trade log (always visible)
+    st.subheader("Today’s Trades (Live Updates)")
+    if st.session_state.trade_log:
+        df_log = pd.DataFrame(st.session_state.trade_log)
+        st.dataframe(df_log)
+        st.info(f"Cumulative P&L: ₹{st.session_state.cum_pnl}")
+    else:
+        st.info("No trades yet (waiting for setup).")
 
 if __name__ == "__main__":
     main()

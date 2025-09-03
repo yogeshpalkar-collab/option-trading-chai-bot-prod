@@ -1,23 +1,19 @@
-# Secured Options Trading Bot v3 (Render, Summary Final, Ultimate Wrapper)
+# Secured Options Trading Bot v3 (Render, Summary Final, Ultimate Wrapper, Persistent Login/Expiry)
 
 ## 🚀 Features
-- Expiry dropdown + ATM detection
-- Bias Dashboard (EMA, VWAP, CPR, ATR, OI Change)
+- Expiry dropdown + ATM detection (remembers selection across refreshes)
+- Bias Dashboard (always shown, even if Neutral)
 - Auto CE/PE selection & trade execution
 - Unified Paper/Live behaviour
 - Risk rules: 4 lots, ATR+10 SL, Target=10, TSL, 3 trades/day, no repeat strike, no trades after 3 PM
-- Trade log with **live TSL updates**
+- Trade log always visible (shows 'No trades yet' if empty)
 - Auto-refresh every 5 seconds
 - 🚫 Hard stop at –₹8,000/day
 - ✅ Lock-in at +₹15,000/day
 - 📊 Summary panel (P&L, trades, status)
-- 🛠 **Ultimate instruments wrapper**:  
-  1. `get_instruments()`  
-  2. `getInstruments()`  
-  3. `get_exchange_instruments("NFO")`  
-  4. Official JSON fallback (`OpenAPIScripMaster.json`)
+- 🛠 **Ultimate instruments wrapper** (SmartApi methods + JSON fallback)
+- 🔒 **Persistent Login** (no re-login on refresh)
+- 📆 **Persistent Expiry** (remembers expiry selection across refreshes)
 
 ## Notes
-- Guaranteed to fetch instruments even if SmartApi changes
-- Paper mode logs simulated Order IDs (`SIM-xxxx`)
-- Live mode logs real Angel One Order IDs
+- Dashboard and expiry selection no longer reset on auto-refresh
