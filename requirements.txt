@@ -1,6 +1,6 @@
 streamlit==1.37.0
 pandas
-smartapi-python==1.5.5 --force-reinstall
+smartapi-python==1.5.5
 logzero
 pyotp
 pycryptodome
