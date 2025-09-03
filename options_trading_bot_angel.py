@@ -4,6 +4,7 @@ from SmartApi import SmartConnect
 import pyotp
 import datetime as dt
 import numpy as np
+import os
 
 # ------------------------- Utility Functions -------------------------
 
@@ -39,11 +40,11 @@ def main():
     st.title("📈 Secured Options Trading Bot (Angel One, Render Version)")
     st.caption("Production-ready. Live Angel One SmartAPI integration.")
 
-    # Master password protection
+    # Master password protection (via env var)
     if "authenticated" not in st.session_state:
         pwd = st.text_input("Enter Master Password", type="password")
         if st.button("Login"):
-            if pwd == st.secrets.get("MASTER_PASSWORD", "changeme"):
+            if pwd == os.environ.get("MASTER_PASSWORD", "changeme"):
                 st.session_state.authenticated = True
                 st.success("Unlocked ✅")
             else:
@@ -60,10 +61,10 @@ def main():
     api = None
     if mode == "Live Trading":
         try:
-            api_key = st.secrets["API_KEY"]
-            client_id = st.secrets["CLIENT_ID"]
-            password = st.secrets["PASSWORD"]
-            totp = pyotp.TOTP(st.secrets["TOTP"]).now()
+            api_key = os.environ["API_KEY"]
+            client_id = os.environ["CLIENT_ID"]
+            password = os.environ["PASSWORD"]
+            totp = pyotp.TOTP(os.environ["TOTP"]).now()
 
             api = SmartConnect(api_key)
             session_data = api.generateSession(client_id, password, totp)
