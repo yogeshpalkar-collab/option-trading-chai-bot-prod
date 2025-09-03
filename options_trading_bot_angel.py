@@ -13,7 +13,7 @@ API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
 PASSWORD = os.getenv("PASSWORD")
 TOTP = os.getenv("TOTP")
-MASTER_PASSWORD = os.getenv("MASTER_PASSWORD")  # ✅ new environment variable for app access
+MASTER_PASSWORD = os.getenv("MASTER_PASSWORD")
 
 live_data = []
 oi_data = {"CE_OI": None, "PE_OI": None, "CE_OI_prev": None, "PE_OI_prev": None}
@@ -24,6 +24,7 @@ mode = None
 instrument_source = None
 instrument_last_updated = None
 trade_engine_status = "❌ Disabled"
+selected_expiry = None
 
 def login_smartapi():
     try:
@@ -48,7 +49,10 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
-        instruments = smartApi.get_instrument_master()
+        if hasattr(smartApi, "get_instrument_master"):
+            instruments = smartApi.get_instrument_master()
+        else:
+            instruments = smartApi.getInstruments()
         df = pd.DataFrame(instruments)
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
@@ -73,6 +77,36 @@ def refresh_instruments(smartApi):
             instrument_source = "❌ Instruments not available"
             instrument_last_updated = None
             return None
+
+def get_expiry_dropdown(instruments):
+    try:
+        nifty_opts = instruments[(instruments["name"] == "NIFTY") & (instruments["instrumenttype"] == "OPTIDX")]
+        expiries = sorted(nifty_opts["expiry"].unique())
+        current_month = dt.date.today().month
+        current_expiries = [e for e in expiries if pd.to_datetime(e).month == current_month]
+        if not current_expiries:
+            current_expiries = expiries
+
+        # Find nearest Tuesday expiry >= today
+        today = dt.date.today()
+        weekly_candidates = []
+        for e in current_expiries:
+            e_date = pd.to_datetime(e).date()
+            if e_date.weekday() == 1 and e_date >= today:  # Tuesday = 1
+                weekly_candidates.append(e_date)
+
+        if weekly_candidates:
+            nearest_weekly = min(weekly_candidates)
+            default_index = current_expiries.index(str(nearest_weekly))
+        else:
+            # fallback to first expiry (monthly)
+            default_index = 0
+
+        selected = st.sidebar.selectbox("Select Expiry", current_expiries, index=default_index)
+        return selected
+    except Exception as e:
+        st.error(f"Error building expiry dropdown: {e}")
+        return None
 
 def get_market_status():
     now = dt.datetime.now()
@@ -112,7 +146,7 @@ def main():
                 st.error("Invalid password. Access denied.")
         st.stop()
 
-    global mode
+    global mode, selected_expiry
     mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)  # Default = Paper
 
     # Market status banner
@@ -137,6 +171,11 @@ def main():
             st.info(f"{instrument_source} | Last updated: {instrument_last_updated}")
         else:
             st.info(instrument_source)
+
+    # Expiry dropdown (nearest Tuesday weekly pre-selected)
+    selected_expiry = get_expiry_dropdown(instruments)
+    if not selected_expiry:
+        st.stop()
 
     if "ENABLED" not in trade_engine_status:
         st.warning("Trade Engine is disabled. Bot will not place trades now.")
