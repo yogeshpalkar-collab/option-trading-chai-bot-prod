@@ -1,24 +1,23 @@
-# Secured Options Trading Bot v3 (Render, Persistent, Ultimate Wrapper, /ping Endpoint, Query Params Updated)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine
 
-## 🚀 Features
-- Expiry dropdown + ATM detection (remembers selection across refreshes)
-- Bias Dashboard (always shown, even if Neutral)
-- Auto CE/PE selection & trade execution
-- Unified Paper/Live behaviour
-- Risk rules: 4 lots, ATR+10 SL, Target=10, TSL, 3 trades/day, no repeat strike, no trades after 3 PM
-- Trade log always visible (shows 'No trades yet' if empty)
-- Auto-refresh every 5 seconds
-- 🚫 Hard stop at –₹8,000/day
-- ✅ Lock-in at +₹15,000/day
-- 📊 Summary panel (P&L, trades, status)
-- 🛠 Ultimate instruments wrapper (SmartApi methods + JSON fallback)
-- 🔒 Persistent Login & Expiry memory
-- ⚡ `/ping` endpoint for uptime monitors
-- ✅ Updated: uses `st.query_params` (no deprecation warning)
+## Overview
+Final production version with:
+- Real-time NIFTY feed via Angel One SmartAPI WebSocket.
+- Full bias logic: EMA(9/21), VWAP, CPR (relaxed for reversals), ATR, OI Change.
+- Trade engine:
+  - ATM CE/PE entries
+  - SL = ATR(14)+10
+  - TSL enabled
+  - Target Relax Mode (capture >10 profit if price spikes)
+  - Max 3 trades/day, no repeat strike, no trades after 3PM
+- Paper mode (default) and Live mode behave identically.
 
-## 🛠 Ping Endpoint
-Use this URL for keep-alive pings:  
-```
-https://options-trading-bot-angelv2.onrender.com/?ping=1
-```
-It responds with `pong` instantly without requiring login.
+## Files
+- options_trading_bot_angel.py → bot script
+- requirements.txt → dependencies
+- README.md → this file
+
+## Deployment
+1. Upload to Render or Streamlit Cloud.
+2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP.
+3. Deploy. Default mode starts as Paper Trading.

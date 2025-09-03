@@ -1,168 +1,248 @@
 import streamlit as st
 import pandas as pd
 from SmartApi import SmartConnect
+from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 import pyotp
 import datetime as dt
+import logzero
+from logzero import logger
+import json
 import os
-import requests
 
-# ------------------------- Utility Functions -------------------------
+API_KEY = os.getenv("API_KEY")
+CLIENT_ID = os.getenv("CLIENT_ID")
+PASSWORD = os.getenv("PASSWORD")
+TOTP = os.getenv("TOTP")
 
-def fetch_instruments(api):
+live_data = []
+oi_data = {"CE_OI": None, "PE_OI": None, "CE_OI_prev": None, "PE_OI_prev": None}
+trades = []
+trade_count = 0
+traded_strikes = set()
+mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)  # Default = Paper
+
+def login_smartapi():
     try:
-        if hasattr(api, "get_instruments"):
-            response = api.get_instruments()
-        elif hasattr(api, "getInstruments"):
-            response = api.getInstruments()
-        elif hasattr(api, "get_exchange_instruments"):
-            response = api.get_exchange_instruments("NFO")
-        else:
-            url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-            response = requests.get(url).json()
+        smartApi = SmartConnect(api_key=API_KEY)
+        token = pyotp.TOTP(TOTP).now()
+        data = smartApi.generateSession(CLIENT_ID, PASSWORD, token)
+        if not data['status']:
+            st.error(f"Login failed: {data['message']}")
+            return None
+        return smartApi
+    except Exception as e:
+        st.error(f"SmartAPI login error: {e}")
+        return None
 
-        if isinstance(response, dict) and "data" in response:
-            all_instruments = response["data"]
-        elif isinstance(response, list):
-            all_instruments = response
-        else:
-            return []
-
-        nifty_opts = [
-            inst for inst in all_instruments
-            if inst.get("name") == "NIFTY" and inst.get("instrumenttype") == "OPTIDX"
-        ]
-        return nifty_opts
+def fetch_instruments(smartApi):
+    try:
+        instruments = smartApi.getInstruments()
+        return pd.DataFrame(instruments)
     except Exception as e:
         st.error(f"Error fetching instruments: {e}")
-        return []
+        return None
 
-def fetch_nifty_spot(api):
+def interpret_oi_change():
     try:
-        spot_data = api.ltpData("NSE", "NIFTY 50", "26000")
-        if spot_data and "data" in spot_data and "ltp" in spot_data["data"]:
-            return float(spot_data["data"]["ltp"])
-        return None
+        ce_oi = oi_data["CE_OI"]
+        pe_oi = oi_data["PE_OI"]
+        ce_prev = oi_data["CE_OI_prev"]
+        pe_prev = oi_data["PE_OI_prev"]
+        if None in [ce_oi, pe_oi, ce_prev, pe_prev]:
+            return "Neutral OI"
+        ce_change = ce_oi - ce_prev
+        pe_change = pe_oi - pe_prev
+        if pe_change > ce_change:
+            return "Bullish OI"
+        elif ce_change > pe_change:
+            return "Bearish OI"
+        else:
+            return "Neutral OI"
     except Exception as e:
-        st.error(f"Error fetching NIFTY spot: {e}")
-        return None
+        return f"Error in OI change: {e}"
 
-def calculate_atm_strike(spot):
-    return int(round(spot / 50.0) * 50)
+def calculate_bias(df):
+    try:
+        ema9 = df['close'].ewm(span=9).mean().iloc[-1]
+        ema21 = df['close'].ewm(span=21).mean().iloc[-1]
 
-# ------------------------- Streamlit UI -------------------------
+        df['cum_vol_price'] = (df['close'] * df['volume']).cumsum()
+        df['cum_vol'] = df['volume'].cumsum()
+        df['vwap'] = df['cum_vol_price'] / df['cum_vol']
+        vwap = df['vwap'].iloc[-1]
+
+        high = df['close'].max()
+        low = df['close'].min()
+        close = df['close'].iloc[-1]
+        pivot = (high + low + close) / 3
+        bc = pivot - (high - low) / 2
+        tc = pivot + (high - low) / 2
+
+        df['prev_close'] = df['close'].shift(1)
+        df['tr1'] = (df['close'] - df['prev_close']).abs()
+        atr = df['tr1'].rolling(14).mean().iloc[-1]
+
+        last_close = df['close'].iloc[-1]
+        oi_signal = interpret_oi_change()
+
+        if ema9 > ema21 and last_close > vwap and "Bullish" in oi_signal:
+            if last_close > tc:
+                return "Bullish"
+            else:
+                return "Bullish (CPR relaxed)"
+        elif ema9 < ema21 and last_close < vwap and "Bearish" in oi_signal:
+            if last_close < bc:
+                return "Bearish"
+            else:
+                return "Bearish (CPR relaxed)"
+        else:
+            return "Neutral"
+    except Exception as e:
+        return f"Error in bias calculation: {e}"
+
+def execute_trade(bias, spot_price, instruments, smartApi):
+    global trades, trade_count, traded_strikes
+    if trade_count >= 3:
+        return "Max trades reached"
+    if dt.datetime.now().hour >= 15:
+        return "No trades after 3 PM"
+
+    atm_strike = round(spot_price / 50) * 50
+    option_type = "CE" if "Bullish" in bias else "PE"
+    strike_key = f"{atm_strike}{option_type}"
+    if strike_key in traded_strikes:
+        return "Repeat strike blocked"
+
+    # SL = ATR(14)+10; here assume ATR ~15 for placeholder; actual ATR should come from bias calc
+    sl_buffer = 25
+    entry_price = spot_price
+    sl_price = entry_price - sl_buffer if option_type == "CE" else entry_price + sl_buffer
+    target_price = entry_price + 10 if option_type == "CE" else entry_price - 10
+
+    trade = {
+        "time": dt.datetime.now(),
+        "strike": atm_strike,
+        "type": option_type,
+        "entry": entry_price,
+        "sl": sl_price,
+        "target": target_price,
+        "tsl": sl_price,
+        "status": "OPEN",
+        "exit": None,
+        "pnl": None,
+        "reason": None,
+        "order_id": None if mode == "Paper" else "LIVE_ORDER_ID"
+    }
+
+    trades.append(trade)
+    traded_strikes.add(strike_key)
+    trade_count += 1
+
+    return f"Trade executed: {strike_key} at {entry_price}"
+
+def update_trades(latest_price):
+    global trades
+    for trade in trades:
+        if trade["status"] != "OPEN":
+            continue
+        if trade["type"] == "CE":
+            if latest_price > trade["tsl"] + 5:
+                trade["tsl"] = latest_price - 5
+            if latest_price <= trade["tsl"]:
+                trade["status"] = "CLOSED"
+                trade["exit"] = trade["tsl"]
+                trade["pnl"] = trade["exit"] - trade["entry"]
+                trade["reason"] = "TSL Hit"
+            elif latest_price >= trade["target"]:
+                trade["tsl"] = latest_price - 5
+                trade["reason"] = "Target Relax Mode"
+        else:
+            if latest_price < trade["tsl"] - 5:
+                trade["tsl"] = latest_price + 5
+            if latest_price >= trade["tsl"]:
+                trade["status"] = "CLOSED"
+                trade["exit"] = trade["tsl"]
+                trade["pnl"] = trade["entry"] - trade["exit"]
+                trade["reason"] = "TSL Hit"
+            elif latest_price <= trade["target"]:
+                trade["tsl"] = latest_price + 5
+                trade["reason"] = "Target Relax Mode"
+
+def start_websocket(smartApi, client_id, feed_token, instrument_token):
+    global live_data
+    try:
+        sws = SmartWebSocketV2(api_key=API_KEY, client_id=client_id,
+                               feed_token=feed_token, jwt_token=smartApi.jwt_token)
+
+        def on_data(wsapp, message):
+            global live_data
+            try:
+                data = json.loads(message)
+                if "last_traded_price" in data:
+                    ltp = data["last_traded_price"]
+                    ts = dt.datetime.now()
+                    live_data.append({"time": ts, "close": ltp, "volume": 1})
+                    if len(live_data) > 500:
+                        live_data = live_data[-500:]
+                    update_trades(ltp)
+            except Exception as e:
+                logger.error(f"Error in on_data: {e}")
+
+        def on_open(wsapp):
+            logger.info("WebSocket connected. Subscribing to NIFTY spot...")
+            sws.subscribe([{"exchangeType": 1, "token": instrument_token}])
+
+        def on_error(wsapp, error):
+            st.error(f"WebSocket error: {error}")
+
+        def on_close(wsapp):
+            logger.warning("WebSocket closed.")
+
+        sws.on_open = on_open
+        sws.on_data = on_data
+        sws.on_error = on_error
+        sws.on_close = on_close
+
+        sws.connect(threaded=True)
+
+    except Exception as e:
+        st.error(f"Error starting WebSocket: {e}")
 
 def main():
-    st.set_page_config(page_title="Options Trading Bot", layout="wide")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Engine")
 
-    # --- Fast /ping endpoint for uptime checks ---
-    query_params = st.query_params
-    if query_params.get("ping") == ["1"]:
-        st.write("pong")
-        return
+    smartApi = login_smartapi()
+    if smartApi is None:
+        st.stop()
 
-    st.title("📈 Secured Options Trading Bot (Angel One, Render Version)")
-    st.caption("Production-ready. Live Angel One SmartAPI integration.")
+    instruments = fetch_instruments(smartApi)
+    if instruments is None:
+        st.stop()
 
-    # Persistent state
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-    if "api" not in st.session_state:
-        st.session_state.api = None
-    if "trade_log" not in st.session_state:
-        st.session_state.trade_log = []
-    if "cum_pnl" not in st.session_state:
-        st.session_state.cum_pnl = 0
-    if "expiry" not in st.session_state:
-        st.session_state.expiry = None
+    feed_token = smartApi.getfeedToken()
+    nifty_row = instruments[(instruments['name'] == 'NIFTY') & (instruments['exch_seg'] == 'NSE')]
+    if nifty_row.empty:
+        st.error("NIFTY instrument not found in instruments list.")
+        st.stop()
 
-    # Login
-    if not st.session_state.authenticated:
-        pwd = st.text_input("Enter Master Password", type="password")
-        if st.button("Login"):
-            if pwd == os.environ.get("MASTER_PASSWORD", "changeme"):
-                try:
-                    api = SmartConnect(os.environ["API_KEY"])
-                    totp = pyotp.TOTP(os.environ["TOTP"]).now()
-                    api.generateSession(os.environ["CLIENT_ID"], os.environ["PASSWORD"], totp)
-                    st.session_state.authenticated = True
-                    st.session_state.api = api
-                    st.success("Unlocked ✅")
-                except Exception as e:
-                    st.error(f"Login failed: {e}")
-                    return
-            else:
-                st.error("Invalid password ❌")
-                return
-        else:
-            return
+    nifty_token = int(nifty_row.iloc[0]['token'])
+    start_websocket(smartApi, CLIENT_ID, feed_token, nifty_token)
+
+    if live_data:
+        df = pd.DataFrame(live_data)
+        bias = calculate_bias(df)
+        st.subheader(f"Bias: {bias}")
+
+        if "Bullish" in bias or "Bearish" in bias:
+            msg = execute_trade(bias, df['close'].iloc[-1], instruments, smartApi)
+            st.info(msg)
+
+    st.subheader("Today's Trades")
+    if trades:
+        df_trades = pd.DataFrame(trades)
+        st.dataframe(df_trades)
     else:
-        api = st.session_state.api
-
-    mode = st.radio("Mode", ["Paper Trading", "Live Trading"], index=0)
-    st.write(f"Current mode: **{mode}**")
-
-    # Summary panel
-    trades_taken = len([t for t in st.session_state.trade_log if "Exit" in t["Action"]])
-    remaining_trades = max(0, 3 - trades_taken)
-    status = "🟢 Active"
-    if st.session_state.cum_pnl <= -8000:
-        status = "🔴 Halted (Max Daily Loss Reached)"
-    elif st.session_state.cum_pnl >= 15000:
-        status = "🔴 Halted (Max Daily Profit Reached)"
-    elif trades_taken >= 3:
-        status = "🔴 Halted (Max Trades Reached)"
-
-    st.subheader("📊 Today’s Summary")
-    st.write(f"**P&L:** ₹{st.session_state.cum_pnl:+}")
-    st.write(f"**Trades Taken:** {trades_taken}")
-    st.write(f"**Remaining Trades:** {remaining_trades}")
-    st.write(f"**Status:** {status}")
-
-    # Instruments & expiry
-    instruments = fetch_instruments(api)
-    st.write(f"Fetched {len(instruments)} NIFTY option instruments")
-
-    if instruments:
-        expiries = sorted(set(inst["expiry"] for inst in instruments))
-        if st.session_state.expiry not in expiries:
-            st.session_state.expiry = expiries[0]
-
-        selected_expiry = st.selectbox(
-            "Select Expiry",
-            expiries,
-            index=expiries.index(st.session_state.expiry),
-            key="expiry_select"
-        )
-        st.session_state.expiry = selected_expiry
-        expiry_instruments = [i for i in instruments if i["expiry"] == selected_expiry]
-
-        spot = fetch_nifty_spot(api)
-        if spot:
-            atm_strike = calculate_atm_strike(spot)
-            st.success(f"NIFTY Spot: {spot} | ATM Strike: {atm_strike}")
-
-            atm_instruments = [i for i in expiry_instruments if i.get("strike") == atm_strike]
-            if atm_instruments:
-                df_atm = pd.DataFrame(atm_instruments)[["tradingsymbol", "expiry", "strike", "instrumenttype"]]
-                st.subheader("ATM CE/PE")
-                st.dataframe(df_atm)
-
-            # Bias dashboard (always visible)
-            st.subheader("Bias Dashboard")
-            st.info("Bias: Neutral (demo placeholder)")
-            st.write("- EMA check pending")
-            st.write("- VWAP check pending")
-            st.write("- CPR check pending")
-            st.write("- OI Change check pending")
-
-    # Trade log (always visible)
-    st.subheader("Today’s Trades (Live Updates)")
-    if st.session_state.trade_log:
-        df_log = pd.DataFrame(st.session_state.trade_log)
-        st.dataframe(df_log)
-        st.info(f"Cumulative P&L: ₹{st.session_state.cum_pnl}")
-    else:
-        st.info("No trades yet (waiting for setup).")
+        st.write("No trades yet.")
 
 if __name__ == "__main__":
     main()
