@@ -1,7 +1,7 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Clean Version
+# Options Trading Bot (Angel One) - Secured v3 Render Final Clean Dual Method
 
 ## Overview
-Final clean production version with:
+Final production version with:
 - Real-time NIFTY feed via Angel One SmartAPI WebSocket.
 - Full bias logic: EMA(9/21), VWAP, CPR (relaxed for reversals), ATR, OI Change.
 - Trade engine:
@@ -11,7 +11,8 @@ Final clean production version with:
   - Target Relax Mode (capture >10 profit if price spikes)
   - Max 3 trades/day, no repeat strike, no trades after 3PM
 - Paper mode (default) and Live mode behave identically.
-- ✅ Instruments fetched only via Angel API (no stubs, no fake fallbacks).
+- ✅ Instruments auto-refresh daily with API and CSV fallback.
+- ✅ Dual-method support for instrument fetch (`get_instrument_master()` or `getInstruments()`).
 - ✅ Expiry dropdown built only from real NIFTY option expiries.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).

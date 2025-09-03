@@ -49,13 +49,21 @@ def refresh_instruments(smartApi):
         instrument_last_updated = dt.datetime.fromtimestamp(os.path.getmtime(csv_file)).strftime("%Y-%m-%d %H:%M:%S")
         return pd.read_csv(csv_file)
 
-    # Fetch from API (no stubs, no fake fallbacks)
+    # Fetch from API (dual method support)
     try:
-        instruments = smartApi.get_instrument_master()
+        if hasattr(smartApi, "get_instrument_master"):
+            instruments = smartApi.get_instrument_master()
+        elif hasattr(smartApi, "getInstruments"):
+            instruments = smartApi.getInstruments()
+        else:
+            st.error("❌ No valid method to fetch instruments found in SmartAPI package.")
+            return None
+
         df = pd.DataFrame(instruments)
         if df.empty:
             st.error("❌ Angel API returned no instruments.")
             return None
+
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"
         instrument_last_updated = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -114,7 +122,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean Version")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean Dual Method")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
