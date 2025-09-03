@@ -43,18 +43,20 @@ def refresh_instruments(smartApi):
     today = dt.date.today().strftime("%Y%m%d")
     csv_file = f"instruments_{today}.csv"
 
-    # Try loading today's CSV first
+    # Try today's CSV first
     if os.path.exists(csv_file):
         instrument_source = f"🟡 Instruments loaded from today's CSV ({csv_file})"
         instrument_last_updated = dt.datetime.fromtimestamp(os.path.getmtime(csv_file)).strftime("%Y-%m-%d %H:%M:%S")
         return pd.read_csv(csv_file)
 
-    # Fetch from API (dual method support)
+    # Fetch from API (default = getInstruments, fallback = get_instrument_master)
     try:
-        if hasattr(smartApi, "get_instrument_master"):
-            instruments = smartApi.get_instrument_master()
-        elif hasattr(smartApi, "getInstruments"):
+        if hasattr(smartApi, "getInstruments"):
             instruments = smartApi.getInstruments()
+            used_method = "getInstruments"
+        elif hasattr(smartApi, "get_instrument_master"):
+            instruments = smartApi.get_instrument_master()
+            used_method = "get_instrument_master"
         else:
             st.error("❌ No valid method to fetch instruments found in SmartAPI package.")
             return None
@@ -65,7 +67,7 @@ def refresh_instruments(smartApi):
             return None
 
         df.to_csv(csv_file, index=False)
-        instrument_source = "🟢 Instruments loaded via API (fresh)"
+        instrument_source = f"🟢 Instruments loaded via API (fresh) using {used_method}()"
         instrument_last_updated = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return df
     except Exception as e:
@@ -122,7 +124,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean Dual Method")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean getInstruments Default")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 

@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Clean Dual Method
+# Options Trading Bot (Angel One) - Secured v3 Render Final Clean (getInstruments Default)
 
 ## Overview
 Final production version with:
@@ -11,8 +11,7 @@ Final production version with:
   - Target Relax Mode (capture >10 profit if price spikes)
   - Max 3 trades/day, no repeat strike, no trades after 3PM
 - Paper mode (default) and Live mode behave identically.
-- ✅ Instruments auto-refresh daily with API and CSV fallback.
-- ✅ Dual-method support for instrument fetch (`get_instrument_master()` or `getInstruments()`).
+- ✅ Instruments fetched with `getInstruments()` by default (fallback = `get_instrument_master()`).
 - ✅ Expiry dropdown built only from real NIFTY option expiries.
 - ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
