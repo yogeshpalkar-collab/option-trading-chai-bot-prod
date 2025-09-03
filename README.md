@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Corrected SmartAPI Fallback)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Corrected SmartAPI Fallback + Logzero Fix)
 
 ## Overview
 Final production version with:
@@ -16,6 +16,7 @@ Final production version with:
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
 - ✅ Expiry dropdown with nearest Tuesday weekly auto-selected (fallback to monthly).
 - ✅ SmartAPI support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
+- ✅ `logzero` dependency restored for SmartAPI internal imports.
 
 ## Files
 - options_trading_bot_angel.py → bot script

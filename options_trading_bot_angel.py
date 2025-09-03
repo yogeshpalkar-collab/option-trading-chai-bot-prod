@@ -40,7 +40,6 @@ def refresh_instruments(smartApi):
         return pd.read_csv(csv_file)
 
     try:
-        # ✅ Corrected fallback order
         if hasattr(smartApi, "get_instrument_master"):
             instruments = smartApi.get_instrument_master()
         elif hasattr(smartApi, "getInstruments"):
@@ -81,7 +80,6 @@ def get_expiry_dropdown(instruments):
         if not current_expiries:
             current_expiries = expiries
 
-        # Nearest Tuesday expiry >= today
         today = dt.date.today()
         weekly_candidates = []
         for e in current_expiries:
@@ -138,9 +136,7 @@ def main():
                 st.error("Invalid password. Access denied.")
         st.stop()
 
-    global selected_expiry
     mode = st.sidebar.radio("Mode", ["Paper", "Live"], index=0)
-
     status_msg, market_open = get_market_status()
     st.info(status_msg)
 
