@@ -5,6 +5,7 @@ import pyotp
 import datetime as dt
 import os
 import pkg_resources
+import requests
 
 API_KEY = os.getenv("API_KEY")
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -38,7 +39,7 @@ def login_smartapi():
         st.error(f"SmartAPI login error: {e}")
         return None
 
-def refresh_instruments(smartApi):
+def refresh_instruments():
     global instrument_source, instrument_last_updated
     today = dt.date.today().strftime("%Y%m%d")
     csv_file = f"instruments_{today}.csv"
@@ -49,29 +50,24 @@ def refresh_instruments(smartApi):
         instrument_last_updated = dt.datetime.fromtimestamp(os.path.getmtime(csv_file)).strftime("%Y-%m-%d %H:%M:%S")
         return pd.read_csv(csv_file)
 
-    # Fetch from API (default = getInstruments, fallback = get_instrument_master)
+    # Fetch from Angel's JSON endpoint directly
     try:
-        if hasattr(smartApi, "getInstruments"):
-            instruments = smartApi.getInstruments()
-            used_method = "getInstruments"
-        elif hasattr(smartApi, "get_instrument_master"):
-            instruments = smartApi.get_instrument_master()
-            used_method = "get_instrument_master"
-        else:
-            st.error("❌ No valid method to fetch instruments found in SmartAPI package.")
+        url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+        response = requests.get(url)
+        if response.status_code != 200:
+            st.error(f"❌ Failed to fetch instrument master JSON: {response.status_code}")
             return None
-
-        df = pd.DataFrame(instruments)
+        data = response.json()
+        df = pd.DataFrame(data)
         if df.empty:
-            st.error("❌ Angel API returned no instruments.")
+            st.error("❌ Angel JSON returned no instruments.")
             return None
-
         df.to_csv(csv_file, index=False)
-        instrument_source = f"🟢 Instruments loaded via API (fresh) using {used_method}()"
+        instrument_source = "🟢 Instruments loaded via Angel JSON (fresh)"
         instrument_last_updated = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return df
     except Exception as e:
-        st.error(f"Instrument fetch failed: {e}")
+        st.error(f"Instrument fetch from JSON failed: {e}")
         return None
 
 def get_expiry_dropdown(instruments):
@@ -124,7 +120,7 @@ def update_trade_engine_status(market_open):
         trade_engine_status = "🟢 Trade Engine ENABLED"
 
 def main():
-    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean getInstruments Default")
+    st.title("Options Trading Bot (Angel One) - Secured v3 Render Final Clean JSON Fetch")
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
@@ -151,7 +147,7 @@ def main():
     if smartApi is None:
         st.stop()
 
-    instruments = refresh_instruments(smartApi)
+    instruments = refresh_instruments()
     if instruments is None:
         st.stop()
 
