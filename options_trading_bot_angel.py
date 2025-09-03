@@ -45,7 +45,11 @@ def refresh_instruments(smartApi):
         elif hasattr(smartApi, "getInstruments"):
             instruments = smartApi.getInstruments()
         else:
-            raise AttributeError("Neither get_instrument_master nor getInstruments found in SmartAPI")
+            st.error("⚠️ SmartAPI version mismatch — please reinstall smartapi-python==1.5.5")
+            instrument_source = "❌ Instruments not available (SmartAPI mismatch)"
+            instrument_last_updated = None
+            return None
+
         df = pd.DataFrame(instruments)
         df.to_csv(csv_file, index=False)
         instrument_source = "🟢 Instruments loaded via API (fresh)"

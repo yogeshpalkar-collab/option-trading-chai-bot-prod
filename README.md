@@ -1,4 +1,4 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Corrected SmartAPI Fallback + Logzero Fix)
+# Options Trading Bot (Angel One) - Secured v3 Render Final Engine (Smart Expiry + Logzero + SmartAPI Mismatch Warning)
 
 ## Overview
 Final production version with:
@@ -16,7 +16,7 @@ Final production version with:
 - ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
 - ✅ Expiry dropdown with nearest Tuesday weekly auto-selected (fallback to monthly).
 - ✅ SmartAPI support with corrected order: `get_instrument_master()` first, fallback to `getInstruments()`.
-- ✅ `logzero` dependency restored for SmartAPI internal imports.
+- ✅ Explicit error if neither method exists: **SmartAPI version mismatch — reinstall smartapi-python==1.5.5**.
 
 ## Files
 - options_trading_bot_angel.py → bot script
@@ -30,4 +30,7 @@ Final production version with:
    ```bash
    streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
    ```
-4. Default mode starts as Paper Trading.
+4. If you see error "SmartAPI version mismatch" → run:
+   ```bash
+   pip install --upgrade --force-reinstall smartapi-python==1.5.5
+   ```
