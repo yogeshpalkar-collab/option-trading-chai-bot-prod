@@ -104,7 +104,7 @@
     "Master password should be stored as a salted hash in the environment and verified server-side; do not compare plaintext."
   ],
   "metadata": {
-    "created_by": "chatgpt-5",
+    "created_by": "chatgpt-5-thinking-mini",
     "created_on": "2025-09-05T18:30:00+05:30",
     "reference_memory_key": "Secured Trading Bot v3 (Render, Production, Instruments Fix)"
   }
