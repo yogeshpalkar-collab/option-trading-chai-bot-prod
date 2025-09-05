@@ -1,111 +1,16 @@
 {
   "name": "Options Trading Bot - Secured v3 (Render)",
-  "version": "v3",
+  "version": "v3-v2",
   "deployment_target": "render.com",
   "safe": true,
-  "description": "Final clean JSON config (expiry-safe) for secured trading bot v3. NO SECRETS included.",
-  "env_placeholders": {
-    "ANGEL_API_KEY": "<SET_ENV_ANGEL_API_KEY>",
-    "ANGEL_CLIENT_ID": "<SET_ENV_CLIENT_ID>",
-    "ANGEL_PASSWORD": "<SET_ENV_PASSWORD>",
-    "ANGEL_TOTP_SECRET": "<SET_ENV_TOTP_SECRET>",
-    "MASTER_PASSWORD_HASH": "<SET_ENV_MASTER_PASSWORD_HASH>"
-  },
   "app_settings": {
-    "paper_trading_default": true,
-    "master_password_protected": true,
-    "master_password_env_var": "MASTER_PASSWORD_HASH",
-    "log_level": "INFO",
-    "trade_log": {
-      "store_today_only": true,
-      "include_cpr_status": true,
-      "include_pnl_in_inr": true,
-      "include_order_id_for_live_trades": true
-    }
-  },
-  "expiry_handling": {
-    "strategy": "dynamic_fetch",
-    "source": "Angel One instruments endpoint (smartapi.getInstruments)",
-    "rules": {
-      "include_current_month": true,
-      "include_weekly_tuesdays": true,
-      "include_monthly_expiries": true,
-      "nearest_expiry_preselected": true,
-      "expiry_validation": "verify expiry exists in instruments list before using",
-      "expiry_time_zone": "IST",
-      "note": "Do NOT hardcode expiry dates; always fetch at runtime from the broker's instruments API."
-    }
-  },
-  "symbol_and_instruments": {
-    "primary_symbol": "NIFTY",
-    "dynamic_lot_size_from_instruments": true,
-    "atm_strike_calc": "round_to_nearest_50_from_spot_ltp"
+    "paper_trading_default": true
   },
   "trade_rules": {
     "lots_per_trade": 4,
-    "dynamic_lot_size": true,
-    "stop_loss": "ATR(14) + 10 points (computed on symbol timeframe)",
-    "trailing_stop_loss": true,
-    "target_points": 10,
     "max_trades_per_day": 3,
-    "no_repeat_strike_same_day": true,
     "no_trades_after_time": "15:00",
-    "order_submission": {
-      "paper_mode": "simulate locally (no live orders)",
-      "live_mode": "submit via Angel One SmartApi",
-      "pre_trade_checks": [
-        "verify_market_status_open",
-        "verify_margin_sufficient (live)",
-        "verify_go_no_go_check (mini GO/NO-GO panel)"
-      ]
-    }
-  },
-  "bias_dashboard": {
-    "indicators": [
-      "EMA(9)",
-      "EMA(21)",
-      "VWAP",
-      "CPR",
-      "ATR(14)"
-    ],
-    "cpr_logic": "relaxed_cpr_by_default (shaded BC-TC zone)",
-    "bias_output": [
-      "Bullish",
-      "Bearish",
-      "Neutral"
-    ],
-    "reasons_included": true
-  },
-  "instrument_fix_notes": {
-    "getInstruments_usage": "do NOT pass 'NFO' as an arg to getInstruments(); use the updated call signature for SmartApi v1.5.5",
-    "rationale": "prevents missing expiry entries and mismatched instrument lists"
-  },
-  "deployment_hardening": {
-    "render_keepalive_ping": {
-      "enabled": true,
-      "method": "external_cron_or_ping_service",
-      "recommended_interval_minutes": 25,
-      "note": "use with care — prefer Render's native health checks + proper startup handling"
-    },
-    "process_supervision": "use builtin service on Render + graceful shutdown handlers (avoid background threads that block shutdown)",
-    "secrets_handling": "store secrets in Render environment variables; never write secrets to disk or logs"
-  },
-  "safety_and_limits": {
-    "max_daily_risk_per_account": "<USER_DEFINED_PERCENT_OR_VALUE>",
-    "session_limits": {
-      "no_orders_after": "15:00 IST",
-      "max_retries_for_order_submission": 3
-    }
-  },
-  "notes_and_instructions": [
-    "This config intentionally contains NO API keys, passwords, or TOTPs — use environment variables.",
-    "Expiry lists must be fetched from the broker at runtime; do not rely on hardcoded dates.",
-    "If you need a local test-expiry for offline testing, create a separate dev config that is never used in production.",
-    "Master password should be stored as a salted hash in the environment and verified server-side; do not compare plaintext."
-  ],
-  "metadata": {
-    "created_by": "chatgpt-5-thinking-mini",
-    "created_on": "2025-09-05T18:30:00+05:30",
-    "reference_memory_key": "Secured Trading Bot v3 (Render, Production, Instruments Fix)"
+    "target_points": 10,
+    "oi_change_threshold_percent": 0.0
   }
 }
