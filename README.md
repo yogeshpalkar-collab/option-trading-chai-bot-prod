@@ -1,36 +1,24 @@
-# Options Trading Bot (Angel One) - Secured v3 Render Final Clean (JSON Fetch + Safe Expiry Fallback)
+# Secured Trading Bot v3 (Render)
 
-## Overview
-Final clean production version with:
-- Real-time NIFTY feed via Angel One SmartAPI WebSocket.
-- Full bias logic: EMA(9/21), VWAP, CPR (relaxed for reversals), ATR, OI Change.
-- Trade engine:
-  - ATM CE/PE entries
-  - SL = ATR(14)+10
-  - TSL enabled
-  - Target Relax Mode (capture >10 profit if price spikes)
-  - Max 3 trades/day, no repeat strike, no trades after 3PM
-- Paper mode (default) and Live mode behave identically.
-- ✅ Instruments fetched directly from Angel's JSON endpoint (`OpenAPIScripMaster.json`).
-- ✅ Expiry dropdown normalized to "YYYY-MM-DD" with safe fallback (no crashes).
-- ✅ Dashboard banners: Market Status, Trade Engine Status, Instrument Source + Timestamp.
-- ✅ Master Password protection (via `MASTER_PASSWORD` env variable).
-- ✅ SmartAPI diagnostic banner to show exact installed package & version.
+This is the final secured trading bot for Angel One, deployed on Render.
 
-## Files
-- options_trading_bot_angel.py → bot script
-- requirements.txt → dependencies
-- README.md → this file
+## Contents
+- `options_trading_bot_angel.py` → Main bot script
+- `requirements.txt` → Python dependencies
+- `README.md` → Setup & usage guide
+- `secured_trading_bot_v3_render_final_clean_json_expiry_safe.json` → Expiry-safe config
 
-## Render Deployment
-1. Upload all files to Render.
-2. Set environment variables: API_KEY, CLIENT_ID, PASSWORD, TOTP, MASTER_PASSWORD.
-3. In **Build Command**, paste this:
-   ```bash
-   pip uninstall -y SmartAPI smartapi-python && pip install --no-cache-dir smartapi-python==1.5.5 && pip install -r requirements.txt
-   ```
-4. In **Start Command**, set:
-   ```bash
-   streamlit run options_trading_bot_angel.py --server.port 10000 --server.address 0.0.0.0
-   ```
-5. Deploy. Default mode starts as Paper Trading.
+## Setup (Render)
+1. Upload these files to your Render service.
+2. Add environment variables:
+   - ANGEL_API_KEY
+   - ANGEL_CLIENT_ID
+   - ANGEL_PASSWORD
+   - ANGEL_TOTP_SECRET
+   - MASTER_PASSWORD_HASH
+3. Deploy the service. Default mode = Paper Trading.
+
+## Notes
+- JSON config ensures expiry-safe handling (no hardcoded dates).
+- Bot stops trading after 3:00 PM IST.
+- Max 3 trades/day, no repeat strike, SL = ATR(14)+10, TSL active.

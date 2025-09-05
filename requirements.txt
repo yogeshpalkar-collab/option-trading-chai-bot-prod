@@ -5,5 +5,3 @@ logzero
 pyotp
 pycryptodome
 websocket-client
-setuptools
-requests
