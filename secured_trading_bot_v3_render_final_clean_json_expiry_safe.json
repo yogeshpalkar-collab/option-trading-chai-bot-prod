@@ -1,16 +1,7 @@
 {
-  "name": "Options Trading Bot - Secured v3 (Render)",
-  "version": "v3-v2",
-  "deployment_target": "render.com",
-  "safe": true,
-  "app_settings": {
-    "paper_trading_default": true
-  },
   "trade_rules": {
     "lots_per_trade": 4,
     "max_trades_per_day": 3,
-    "no_trades_after_time": "15:00",
-    "target_points": 10,
-    "oi_change_threshold_percent": 0.0
+    "no_trades_after_time": "15:00"
   }
 }
