@@ -13,32 +13,12 @@ from queue import Queue, Empty
 import streamlit as st
 import pandas as pd
 import numpy as np
-
-# SmartAPI import
 SMARTAPI_AVAILABLE = False
-try:
-    from smartapi import SmartConnect
-    SMARTAPI_AVAILABLE = True
-except Exception:
-    try:
-        from SmartApi.smartConnect import SmartConnect
-        SMARTAPI_AVAILABLE = True
-    except Exception:
-        SMARTAPI_AVAILABLE = False
-
-# Optional websocket-client
-try:
-    import websocket
-    WS_CLIENT_AVAILABLE = True
-except Exception:
-    WS_CLIENT_AVAILABLE = False
+WS_CLIENT_AVAILABLE = False
+PYOTP_AVAILABLE = False
 
 # Optional pyotp for TOTP
-try:
-    import pyotp
-    PYOTP_AVAILABLE = True
-except Exception:
-    PYOTP_AVAILABLE = False
+PYOTP_AVAILABLE = False
 
 def dtstr(dt):
     return dt.strftime("%Y-%m-%d %H:%M")
@@ -75,7 +55,24 @@ class AngelClient:
         self.logged_in = False
 
     def connect(self):
-        if not SMARTAPI_AVAILABLE:
+        
+# Lazy import SmartAPI and pyotp here so module import never fails when packages missing.
+global SMARTAPI_AVAILABLE, PYOTP_AVAILABLE
+try:
+    from smartapi import SmartConnect
+    SMARTAPI_AVAILABLE = True
+except Exception:
+    try:
+        from SmartApi.smartConnect import SmartConnect
+        SMARTAPI_AVAILABLE = True
+    except Exception:
+        SMARTAPI_AVAILABLE = False
+try:
+    import pyotp
+    PYOTP_AVAILABLE = True
+except Exception:
+    PYOTP_AVAILABLE = False
+if not SMARTAPI_AVAILABLE:
             raise RuntimeError("smartapi-python not installed in the environment.")
         self.client = SmartConnect(api_key=self.api_key)
         totp = None
@@ -162,7 +159,16 @@ class SmartAPIWebsocketClient:
         pass
 
     def start(self, tokens=None):
-        if not WS_CLIENT_AVAILABLE:
+        
+# Lazy import websocket-client here (do not import at module load)
+global WS_CLIENT_AVAILABLE, websocket
+try:
+    import websocket as _ws_mod
+    websocket = _ws_mod
+    WS_CLIENT_AVAILABLE = True
+except Exception:
+    WS_CLIENT_AVAILABLE = False
+if not WS_CLIENT_AVAILABLE:
             raise RuntimeError("websocket-client not available")
         client = getattr(self.angel, 'client', None)
         try:
