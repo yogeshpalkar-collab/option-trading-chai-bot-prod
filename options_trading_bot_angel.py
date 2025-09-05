@@ -11,6 +11,29 @@ from datetime import datetime, timedelta, time as dtime
 import pandas as pd
 import numpy as np
 
+
+
+# --- Safe shutdown helpers (compatible with Streamlit) ---
+import threading
+_stop_event = threading.Event()
+
+def get_stop_event():
+    return _stop_event
+
+def safe_register_signals(handler):
+    """Register OS signals only if running in main thread. In worker threads (Streamlit)
+    we skip registering signal handlers to avoid exceptions."""
+    try:
+        if threading.current_thread() is threading.main_thread():
+            import signal as _signal_module
+            _signal_module.signal(_signal_module.SIGINT, lambda *a, **k: handler())
+            _signal_module.signal(_signal_module.SIGTERM, lambda *a, **k: handler())
+            print('[INFO] Signal handlers registered (main thread).')
+        else:
+            print('[INFO] Running in worker thread; skipping OS signal registration.')
+    except Exception as e:
+        print('[WARN] safe_register_signals failed:', e)
+
 # SmartAPI import
 SMARTAPI_AVAILABLE = False
 try:
@@ -121,7 +144,7 @@ class LiveBot(threading.Thread):
         self.angel = angel_client
         self.config = config
         self.expiry_getter = expiry_getter
-        self.stop_event = threading.Event()
+        self.stop_event = get_stop_event()
         self.trades = []
         self.ui_log = ui_logger
         # store last seen OI per symboltoken to compute change
@@ -281,7 +304,7 @@ class LiveBot(threading.Thread):
     def run(self):
         try:
             instr_df = None
-            while not self.stop_event.is_set():
+            while not get_stop_event().is_set():
                 try:
                     if self.angel and not getattr(self.angel, 'logged_in', False):
                         self.ui("[info] reconnecting...")
