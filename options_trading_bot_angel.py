@@ -6,7 +6,14 @@
 # - OI change computed from consecutive LTP/OI reads stored in bot state
 # Environment vars used: API_KEY, CLIENT_ID, PASSWORD, MASTER_PASSWORD, TOTP
 import streamlit as st
-import os, json, threading, time, traceback
+import os, json, threading, time, traceback, datetime
+try:
+    import websocket
+    WS_CLIENT_AVAILABLE = True
+except Exception:
+    WS_CLIENT_AVAILABLE = False
+from queue import Queue, Empty
+
 from datetime import datetime, timedelta, time as dtime
 import pandas as pd
 import numpy as np
@@ -138,8 +145,159 @@ class AngelClient:
     def place_order(self, order_params):
         return self.client.placeOrder(order_params=order_params)
 
+
+
+
+# --- WebSocket helper for SmartAPI ticks (best-effort) ---
+class SmartAPIWebsocketClient:
+    \"\"\"Best-effort SmartAPI websocket client wrapper.
+    Tries to use SmartConnect websocket if available; otherwise uses websocket-client to connect.
+    It exposes a simple subscribe(tokens) and a thread that pushes ticks to a Queue for consumer.\"\"\"
+    def __init__(self, angel_client):
+        self.angel = angel_client
+        self.ws = None
+        self.thread = None
+        self.queue = Queue()
+        self.subscribed = set()
+        self.stop_event = threading.Event()
+
+    def _on_message(self, ws, message):
+        try:
+            # SmartAPI websockets often send JSON messages; push to queue
+            data = json.loads(message)
+            self.queue.put(data)
+        except Exception:
+            # push raw if JSON fails
+            self.queue.put(message)
+
+    def _on_open(self, ws):
+        # optionally log
+        try:
+            print('[WS] connection opened')
+        except Exception:
+            pass
+
+    def _on_error(self, ws, err):
+        try:
+            print('[WS] error', err)
+        except Exception:
+            pass
+
+    def _on_close(self, ws, code, reason):
+        try:
+            print('[WS] closed', code, reason)
+        except Exception:
+            pass
+
+    def start(self, tokens):
+        # tokens: list of symboltoken strings
+        if not WS_CLIENT_AVAILABLE:
+            raise RuntimeError('websocket-client not installed in environment.')
+        # Attempt to use SmartConnect built-in websocket if available
+        try:
+            client = getattr(self.angel, 'client', None)
+            if client and hasattr(client, 'ws_connect'):
+                # some SmartAPI SDKs provide ws_connect — try to use it
+                self.ws = client.ws_connect(tokens)
+                # SDK may return a wrapper; push a small reader thread if possible
+                self.thread = threading.Thread(target=self._sdk_ws_reader, daemon=True)
+                self.thread.start()
+                return
+        except Exception as e:
+            print('[WS] SmartConnect.ws_connect failed:', e)
+        # Fallback: use websocket-client to connect to a guessed SmartAPI websocket endpoint
+        try:
+            # Construct websocket URL based on known SmartAPI patterns (best-effort). If it fails, exception will be raised.
+            ws_url = "wss://ws.smartapi.angelone.in/v2"  # common endpoint pattern; may vary per account/region
+            headers = []
+            # If token available, add auth header; some endpoints require access token in params
+            token = None
+            try:
+                token = self.angel.client.get_access_token() if hasattr(self.angel.client, 'get_access_token') else None
+            except Exception:
+                token = None
+            if token:
+                ws_url += f"?token={token}"
+            self.ws = websocket.WebSocketApp(ws_url,
+                                             on_message=self._on_message,
+                                             on_open=self._on_open,
+                                             on_error=self._on_error,
+                                             on_close=self._on_close,
+                                             header=headers)
+            self.thread = threading.Thread(target=self._run_ws, daemon=True)
+            self.thread.start()
+            # send initial subscribe once open (subscribe format may vary)
+            # We'll add subscriptions via self.subscribe()
+        except Exception as e:
+            raise RuntimeError(f'WebSocket start failed: {e}')
+
+    def _run_ws(self):
+        try:
+            self.ws.run_forever()
+        except Exception as e:
+            print('[WS] run_forever failed:', e)
+
+    def _sdk_ws_reader(self):
+        # Best-effort: read messages from SDK wrapper and push to queue
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    msg = self.ws.recv()
+                    if msg:
+                        self.queue.put(msg)
+                except Exception:
+                    time.sleep(0.1)
+        except Exception as e:
+            print('[WS] sdk reader stopped:', e)
+
+    def subscribe(self, tokens):
+        # tokens: iterable of symboltoken strings
+        for t in tokens:
+            self.subscribed.add(str(t))
+        # Try SDK subscribe if available
+        try:
+            client = getattr(self.angel, 'client', None)
+            if client and hasattr(client, 'ws_subscribe'):
+                client.ws_subscribe(list(self.subscribed))
+                return
+        except Exception as e:
+            print('[WS] sdk subscribe failed:', e)
+        # If using websocket-client, send a subscribe message (format depends on provider)
+        try:
+            if self.ws and hasattr(self.ws, 'send'):
+                msg = json.dumps({"action": "subscribe", "params": {"tokens": list(self.subscribed)}})
+                try:
+                    self.ws.send(msg)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def get_tick(self, timeout=0.2):
+        try:
+            return self.queue.get(timeout=timeout)
+        except Empty:
+            return None
+
+    def stop(self):
+        try:
+            self.stop_event.set()
+            if self.ws:
+                try:
+                    self.ws.close()
+                except Exception:
+                    pass
+            if self.thread and self.thread.is_alive():
+                try:
+                    self.thread.join(timeout=1)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 class LiveBot(threading.Thread):
-    def __init__(self, angel_client, config, expiry_getter, ui_logger):
+    def __init__(self, angel_client, config, expiry_getter, ui_logger, settings_getter=None):
+        # Accept settings_getter via kwargs for runtime controls (will be injected during start)
+
         super().__init__(daemon=True)
         self.angel = angel_client
         self.config = config
@@ -150,8 +308,104 @@ class LiveBot(threading.Thread):
         # store last seen OI per symboltoken to compute change
         self.last_oi = {}
 
+
+def _get_runtime_setting(self, key, default):
+
+def _fetch_candles_either_ws_or_rest(self, instrument_record, exchange='NFO'):
+    \"\"\"Fetch candles using websocket ticks when enabled in runtime settings; otherwise fall back to REST getCandleData.\"\"\"
+    use_ws = False
+    try:
+        use_ws = bool(self._get_runtime_setting('use_websocket_ticks', False))
+    except Exception:
+        use_ws = False
+    # Try websocket path
+    if use_ws and WS_CLIENT_AVAILABLE:
+        try:
+            # Start websocket client if not present
+            if not hasattr(self, 'ws_client') or self.ws_client is None:
+                self.ws_client = SmartAPIWebsocketClient(self.angel)
+            # subscribe to instrument token
+            token = instrument_record.get('symboltoken') or instrument_record.get('token') or instrument_record.get('instrument_token')
+            if token is None:
+                raise RuntimeError('No symboltoken for websocket subscribe')
+            self.ws_client.start([str(token)])
+            self.ws_client.subscribe([str(token)])
+            # collect ticks for up to 10 seconds to assemble short candles; this is a best-effort approach
+            ticks = []
+            start = time.time()
+            while time.time() - start < 10:
+                tick = self.ws_client.get_tick(timeout=1.0)
+                if tick:
+                    ticks.append(tick)
+            # attempt to convert ticks into candles (best-effort, depends on tick format)
+            # Expected tick format: dict with 'last_price','open','high','low','close','volume','timestamp' or similar
+            rows = []
+            for t in ticks:
+                if isinstance(t, dict):
+                    # try to extract price and volume
+                    ts = t.get('timestamp') or t.get('time') or t.get('t')
+                    price = t.get('last_price') or t.get('ltp') or t.get('price') or t.get('l')
+                    vol = t.get('volume') or t.get('v') or 0
+                    if ts is None or price is None:
+                        continue
+                    rows.append({'timestamp': pd.to_datetime(ts), 'open': price, 'high': price, 'low': price, 'close': price, 'volume': vol})
+            if len(rows) >= 3:
+                df = pd.DataFrame(rows).dropna().reset_index(drop=True)
+                return df
+        except Exception as e:
+            self.ui(f'[warn] websocket tick fetch failed, falling back to REST candles: {e}')
+            try:
+                if hasattr(self, 'ws_client') and self.ws_client:
+                    self.ws_client.stop()
+            except Exception:
+                pass
+    # REST fallback - use get_candle_data as before
+    try:
+        symboltoken = instrument_record.get('symboltoken') or instrument_record.get('token') or instrument_record.get('instrument_token')
+        todate = datetime.datetime.now()
+        fromdate = todate - datetime.timedelta(minutes=200)
+        raw = self.angel.get_candle_data(exchange, symboltoken, interval='ONE_MINUTE', fromdate=dtstr(fromdate), todate=dtstr(todate))
+        # parse as before
+        if isinstance(raw, dict) and 'data' in raw:
+            data_rows = raw['data']
+        else:
+            data_rows = raw
+        if len(data_rows) and isinstance(data_rows[0], (list, tuple)):
+            df = pd.DataFrame(data_rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df[['open','high','low','close','volume']] = df[['open','high','low','close','volume']].apply(pd.to_numeric, errors='coerce')
+        elif len(data_rows) and isinstance(data_rows[0], dict):
+            df = pd.json_normalize(data_rows)
+            possible = ['timestamp','open','high','low','close','volume']
+            df = df[[c for c in df.columns if c in possible]].copy()
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+        else:
+            raise RuntimeError('Unhandled candle data format.')
+        df = df.dropna().reset_index(drop=True)
+        return df
+    except Exception as e:
+        raise RuntimeError(f'Failed to fetch candles by REST: {e}')
+
+    try:
+        if callable(getattr(self, 'settings_getter', None)):
+            s = self.settings_getter() or {}
+            return s.get(key, default)
+    except Exception:
+        pass
+    # fallback to config (older behavior) or default
+    try:
+        return self.config.get('trade_rules', {}).get(key, default)
+    except Exception:
+        return default
+
     def stop(self):
         self.stop_event.set()
+        try:
+            path = _export_trades_to_csv_helper(self.trades)
+            if path:
+                self.ui(f'[info] Trades exported to {path} on stop')
+        except Exception:
+            pass
 
     def ui(self, *args, **kwargs):
         try:
@@ -219,68 +473,114 @@ class LiveBot(threading.Thread):
             self.ui(f"[warn] fetch_oi_from_ltp failed: {e}")
             return None
 
-    def run_once_for_option(self, option_token_info, exchange='NFO'):
-        symboltoken = option_token_info.get('symboltoken') or option_token_info.get('token') or option_token_info.get('instrument_token')
-        if not symboltoken:
-            raise RuntimeError("Option symboltoken not found in instrument record.")
-        todate = datetime.now()
-        fromdate = todate - timedelta(minutes=200)
-        try:
-            raw = self.angel.get_candle_data(exchange, symboltoken, interval='ONE_MINUTE', fromdate=dtstr(fromdate), todate=dtstr(todate))
-        except Exception as e:
-            raise RuntimeError(f"getCandleData failed: {e}")
-        df = None
-        try:
-            if isinstance(raw, dict) and 'data' in raw:
-                data_rows = raw['data']
-            else:
-                data_rows = raw
-            if len(data_rows) and isinstance(data_rows[0], (list, tuple)):
-                df = pd.DataFrame(data_rows, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df[['open','high','low','close','volume']] = df[['open','high','low','close','volume']].apply(pd.to_numeric, errors='coerce')
-            elif len(data_rows) and isinstance(data_rows[0], dict):
-                df = pd.json_normalize(data_rows)
-                possible = ['timestamp','open','high','low','close','volume']
-                df = df[[c for c in df.columns if c in possible]].copy()
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-            else:
-                raise RuntimeError("Unhandled candle data format.")
-        except Exception as e:
-            raise RuntimeError(f"Failed to parse candle data: {e}")
-        df = df.dropna().reset_index(drop=True)
-        if df is None or df.shape[0] < 5:
-            raise RuntimeError("Insufficient candle data for indicators.")
-        ind_df = self.compute_indicators_from_candles(df)
-        latest = ind_df.iloc[-1]
-        cprv = cpr_calc(df)
-        # compute OI change
-        current_oi = self.fetch_oi_from_ltp(option_token_info) or 0.0
-        prev_oi = self.last_oi.get(str(symboltoken))
-        oi_change_pct = None
-        if prev_oi is not None and prev_oi != 0:
-            oi_change_pct = ((current_oi - prev_oi) / abs(prev_oi)) * 100.0
-        # update last_oi store
-        self.last_oi[str(symboltoken)] = current_oi
-        # Decision logic with EMA9 vs EMA20 and VWAP plus OI increase requirement
-        bias = 'Neutral'
-        if latest['close'] > latest['ema9'] and latest['ema9'] > latest['ema20'] and latest['ema9'] > latest['vwap']:
-            bias = 'Bullish'
-        elif latest['close'] < latest['ema9'] and latest['ema9'] < latest['ema20'] and latest['ema9'] < latest['vwap']:
-            bias = 'Bearish'
-        decision = None
-        sl = float(latest['atr14']) + 10
-        # require OI change positive to confirm trade (configurable threshold)
-        threshold = float(self.config['trade_rules'].get('oi_change_threshold_percent', 0.0))
-        oi_ok = oi_change_pct is not None and oi_change_pct > threshold
-        # If prev_oi missing, we treat OI as not confirmed (conservative)
-        if bias == 'Bullish' and oi_ok:
-            decision = {'type': 'BUY_CALL', 'sl': sl, 'oi_change_pct': oi_change_pct}
-        elif bias == 'Bearish' and oi_ok:
-            decision = {'type': 'BUY_PUT', 'sl': sl, 'oi_change_pct': oi_change_pct}
-        return decision, bias, cprv, ind_df
+    
 
-    def build_order_params(self, instrument_record, decision, lots_multiplier=1):
+# --- consolidated decision logic enforcing EMA/VWAP/OI/CPR (with reversal relaxation) ---
+# Variables available: ind_df, latest, cprv, current_oi, prev_oi, oi_change_pct, sl, bias, oi_ok (maybe)
+# Compute EMA relations and VWAP checks explicitly
+ema9 = float(latest.get('ema9', 0.0)) if 'ema9' in latest.index else None
+ema20 = float(latest.get('ema20', 0.0)) if 'ema20' in latest.index else None
+vwap_val = float(latest.get('vwap', 0.0)) if 'vwap' in latest.index else None
+price = float(latest.get('close', 0.0))
+# EMA/VWAP rules
+ema_vwap_ok = False
+if ema9 is not None and ema20 is not None and vwap_val is not None:
+    if bias == 'Bullish':
+        ema_vwap_ok = (ema9 > ema20) and (ema9 > vwap_val)
+    elif bias == 'Bearish':
+        ema_vwap_ok = (ema9 < ema20) and (ema9 < vwap_val)
+else:
+    # conservative default: require EMA relation only if VWAP missing
+    if ema9 is not None and ema20 is not None:
+        if bias == 'Bullish': ema_vwap_ok = ema9 > ema20
+        if bias == 'Bearish': ema_vwap_ok = ema9 < ema20
+
+# OI change enforcement (explicit)
+oi_threshold = float(self._get_runtime_setting('oi_change_threshold_percent', 0.0))
+oi_ok_local = False
+try:
+    # oi_change_pct may be None if previous OI missing; require positive and above threshold
+    if oi_change_pct is not None:
+        oi_ok_local = (oi_change_pct > oi_threshold)
+except Exception:
+    oi_ok_local = False
+
+# CPR logic (use previously computed cpr_pass via the reversal-aware block)
+# Recompute CPR pass using existing config and reversal detection for safety
+tr_cfg = self.config.get('trade_rules', {})
+cpr_max_points = float(tr_cfg.get('cpr_max_width_points', 50.0))
+cpr_max_factor = float(tr_cfg.get('cpr_max_width_factor_of_atr', 2.0))
+cpr_relax_factor = float(tr_cfg.get('cpr_relax_factor', 2.0))
+require_price_vs_tc_bc = bool(tr_cfg.get('cpr_require_price_vs_tc_bc', True))
+
+cpr_width = float(cprv.get('width', 0.0))
+atr_latest = float(latest.get('atr14', 0.0)) if 'atr14' in latest.index else 0.0
+
+# detect recent EMA cross (reversal) and recent price crossing BC/TC
+ema_diff = ind_df['ema9'] - ind_df['ema20'] if 'ema9' in ind_df.columns and 'ema20' in ind_df.columns else None
+recent_cross = False
+if ema_diff is not None and len(ema_diff) >= 4:
+    try:
+        last_signs = (ema_diff.iloc[-4:] > 0).astype(int)
+        recent_cross = (last_signs.max() != last_signs.min())
+    except Exception:
+        recent_cross = False
+price_cross_recent = False
+try:
+    closes = ind_df['close'].iloc[-4:]
+    bc = float(cprv.get('BC', 0.0))
+    tc = float(cprv.get('TC', 0.0))
+    if len(closes) >= 2:
+        crossed_bc = ((closes < bc).astype(int).diff().abs().sum() > 0)
+        crossed_tc = ((closes < tc).astype(int).diff().abs().sum() > 0)
+        price_cross_recent = bool(crossed_bc or crossed_tc)
+except Exception:
+    price_cross_recent = False
+
+reversal_signal = recent_cross or price_cross_recent
+
+effective_max_points = cpr_max_points * (cpr_relax_factor if reversal_signal else 1.0)
+effective_max_factor = cpr_max_factor * (cpr_relax_factor if reversal_signal else 1.0)
+
+cpr_ok_abs = (cpr_width <= effective_max_points)
+cpr_ok_rel = True
+if atr_latest and effective_max_factor > 0:
+    cpr_ok_rel = (cpr_width <= (effective_max_factor * atr_latest))
+cpr_ok = cpr_ok_abs and cpr_ok_rel
+
+bc = float(cprv.get('BC', 0.0))
+tc = float(cprv.get('TC', 0.0))
+
+cpr_direction_ok = True
+if require_price_vs_tc_bc:
+    if bias == 'Bullish':
+        if reversal_signal:
+            cpr_direction_ok = (price >= bc) or cpr_ok
+        else:
+            cpr_direction_ok = (price > tc) or (price > bc and cpr_ok)
+    elif bias == 'Bearish':
+        if reversal_signal:
+            cpr_direction_ok = (price <= tc) or cpr_ok
+        else:
+            cpr_direction_ok = (price < bc) or (price < tc and cpr_ok)
+    else:
+        cpr_direction_ok = False
+
+cpr_pass = cpr_ok and cpr_direction_ok
+
+# Final combined gate: EMA/VWAP ok AND OI ok AND CPR pass
+final_decision = None
+if bias == 'Bullish' and ema_vwap_ok and oi_ok_local and cpr_pass:
+    final_decision = {'type': 'BUY_CALL', 'sl': sl, 'oi_change_pct': oi_change_pct, 'cpr_width': cpr_width, 'reversal_relaxed': reversal_signal}
+elif bias == 'Bearish' and ema_vwap_ok and oi_ok_local and cpr_pass:
+    final_decision = {'type': 'BUY_PUT', 'sl': sl, 'oi_change_pct': oi_change_pct, 'cpr_width': cpr_width, 'reversal_relaxed': reversal_signal}
+else:
+    final_decision = None
+
+decision = final_decision
+
+return decision, bias, cprv, ind_df
+def build_order_params(self, instrument_record, decision, lots_multiplier=1):
         tradingsymbol = instrument_record.get('tradingsymbol') or instrument_record.get('symbol') or instrument_record.get('name')
         symboltoken = instrument_record.get('symboltoken') or instrument_record.get('token') or instrument_record.get('instrument_token')
         lot_size = instrument_record.get('lot_size') or instrument_record.get('lotsize') or instrument_record.get('lotSize') or 1
@@ -348,6 +648,7 @@ class LiveBot(threading.Thread):
                         self.ui(f"[error] failed to fetch underlying LTP: {e}")
                         time.sleep(10); continue
                     atm_strike = round_to_nearest(spot, base=50)
+                    self.ui(f"[info] ATM strike: {atm_strike}")
                     expiry = self.expiry_getter()
                     if not expiry:
                         self.ui("[warn] No expiry selected in UI; waiting for selection.")
@@ -388,6 +689,22 @@ class LiveBot(threading.Thread):
             self.ui(traceback.format_exc())
 
 # ---------------- Streamlit UI ----------------
+
+
+def _export_trades_to_csv_helper(trades):
+    try:
+        import pandas as _pd, os as _os, datetime as _dt
+        if not trades:
+            return None
+        df = _pd.json_normalize(trades[::-1])
+        fname = f"trades_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        out_path = _os.path.join('/mnt/data', fname)
+        df.to_csv(out_path, index=False)
+        return out_path
+    except Exception as e:
+        return None
+
+
 st.set_page_config(page_title='Secured Trading Bot v3 (Angel Live) v2', layout='wide')
 st.title("Secured Trading Bot v3 — Live (Angel One) v2")
 
@@ -400,6 +717,32 @@ config = load_config(cfg_path)
 with st.sidebar:
     st.header("Controls")
     mode = st.radio("Mode", ["Paper", "Live"], index=0)
+
+# --- Runtime tuning controls (no JSON edits) ---
+st.markdown('---')
+st.subheader('Runtime gates (live tuning)')
+# OI threshold percent (default 0.0)
+oi_thr = st.slider('OI increase threshold %', -50.0, 200.0, 0.0, step=0.5, help='Require OI percent change greater than this to allow trade.')
+cpr_points = st.slider('CPR max width (points)', 0, 500, 50, step=1, help='Absolute CPR width cap.')
+cpr_factor = st.slider('CPR max-factor of ATR', 0.1, 10.0, 2.0, step=0.1, help='Relative cap: CPR width <= factor * ATR.')
+relax_toggle = st.checkbox('Relax CPR on reversal', value=False)
+relax_factor = st.slider('CPR relax factor', 1.0, 5.0, 2.0, step=0.1, help='When reversal detected, CPR thresholds multiplied by this.')
+apply_runtime = st.button('Apply runtime settings')
+if 'applied_runtime_settings' not in st.session_state:
+    st.session_state['applied_runtime_settings'] = {'oi_change_threshold_percent': 0.0, 'cpr_max_width_points': 50.0, 'cpr_max_width_factor_of_atr': 2.0, 'cpr_relax_factor': 2.0, 'cpr_require_price_vs_tc_bc': True}
+if apply_runtime:
+    st.session_state['applied_runtime_settings'] = {
+            'oi_change_threshold_percent': float(oi_thr),
+            'cpr_max_width_points': int(cpr_points),
+            'cpr_max_width_factor_of_atr': float(cpr_factor),
+            'cpr_relax_factor': float(relax_factor),
+            'cpr_require_price_vs_tc_bc': True,
+            'use_websocket_ticks': bool(use_ws)
+        }
+    st.success('Applied runtime settings.')
+# show current applied settings
+st.write('Active runtime settings:', st.session_state.get('applied_runtime_settings'))
+
     st.markdown("**Expiry selector (populated from Angel instruments when connected)**")
     expiries = []
     can_fetch = SMARTAPI_AVAILABLE and os.getenv('API_KEY') and os.getenv('CLIENT_ID') and os.getenv('PASSWORD')
@@ -444,6 +787,29 @@ if 'bot' not in st.session_state:
     st.session_state['bot'] = None
     st.session_state['log_msgs'] = []
 
+# Auto-start behavior: start bot automatically in Paper mode unless Live selected and credentials exist.
+_auto_start_on_launch = True
+if _auto_start_on_launch and (st.session_state.get('bot') is None or not getattr(st.session_state.get('bot'), 'is_alive', lambda: False)()):
+    try:
+        # reuse the same start logic: create angel_client only if Live selected
+        angel_client = None
+        paper = (mode == 'Paper')
+        if mode == 'Live' and SMARTAPI_AVAILABLE and os.getenv('API_KEY') and os.getenv('CLIENT_ID') and os.getenv('PASSWORD'):
+            try:
+                angel_client = AngelClient(os.getenv('API_KEY'), os.getenv('CLIENT_ID'), os.getenv('PASSWORD'), master_password=os.getenv('MASTER_PASSWORD'), totp_secret=os.getenv('TOTP'))
+                angel_client.connect()
+            except Exception as e:
+                st.session_state['log_msgs'].append(f"{datetime.datetime.now().isoformat()} - [warn] Auto-start live connection failed: {e}")
+                angel_client = None
+                paper = True
+        executor = OrderExecutor(api_client=(angel_client.client if angel_client else None), paper_mode=paper) if 'OrderExecutor' in globals() else None
+        bot_thread = LiveBot(angel_client, config, expiry_getter, ui_logger, settings_getter=lambda: st.session_state.get('applied_runtime_settings', {}))
+        st.session_state['bot'] = bot_thread
+        bot_thread.start()
+        st.session_state['log_msgs'].append(f"{datetime.datetime.now().isoformat()} - [info] Bot auto-started in {'Live' if angel_client and getattr(angel_client,'logged_in',False) else 'Paper'} mode.")
+    except Exception as e:
+        st.session_state['log_msgs'].append(f"{datetime.datetime.now().isoformat()} - [error] Auto-start failed: {e}")
+
 def ui_logger(msg):
     st.session_state['log_msgs'].append(f"{datetime.now().isoformat()} - {msg}")
     st.session_state['log_msgs'] = st.session_state['log_msgs'][-200:]
@@ -470,7 +836,7 @@ if start:
                 except Exception as e:
                     st.error("Could not connect to Angel SmartAPI: " + str(e))
                     angel_client = None
-        bot_thread = LiveBot(angel_client, config, expiry_getter, ui_logger)
+        bot_thread = LiveBot(angel_client, config, expiry_getter, ui_logger, settings_getter=lambda: st.session_state.get('applied_runtime_settings', {}))
         st.session_state['bot'] = bot_thread
         bot_thread.start()
         st.success(f"Bot started in {'Live' if angel_client and angel_client.logged_in else 'Paper'} mode.")
@@ -489,3 +855,25 @@ if st.session_state.get('bot') is None:
 else:
     trades_area.dataframe(pd.json_normalize(st.session_state['bot'].trades[::-1]) if st.session_state['bot'].trades else pd.DataFrame())
     log_area.text("\n".join(st.session_state['log_msgs'][-50:] if st.session_state['log_msgs'] else ["No logs yet."]))
+
+
+# --- Export trades button (writes CSV to disk and shows download link) ---
+def _export_trades_to_csv():
+    bot = st.session_state.get('bot')
+    if not bot or not getattr(bot, 'trades', None):
+        st.warning('No trades to export.')
+        return None
+    import pandas as _pd, os as _os, datetime as _dt
+    df = _pd.json_normalize(bot.trades[::-1])
+    fname = f"trades_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    out_path = _os.path.join('/mnt/data', fname)
+    df.to_csv(out_path, index=False)
+    return out_path
+
+with st.sidebar:
+    st.markdown('---')
+    if st.button('Export trades to CSV'):
+        path = _export_trades_to_csv()
+        if path:
+            st.success('Trades exported: ' + path)
+            st.markdown(f'[Download exported trades]({path})')
