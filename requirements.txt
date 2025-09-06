@@ -1,7 +1,6 @@
 streamlit==1.37.0
-pandas
+pandas==2.2.2
 smartapi-python==1.5.5
-logzero
-pyotp
-pycryptodome
-websocket-client
+logzero==1.5.0
+pyotp==2.8.0
+pycryptodome==3.19.0
