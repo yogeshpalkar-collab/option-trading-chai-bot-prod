@@ -168,6 +168,10 @@ try:
                 'ema9': engine.ema_short(), 'ema21': engine.ema_long(), 'vwap': engine.vwap(), 'atr': engine.atr(), 'oi_ch': engine.oi_change_pct(), 'cpr': engine.cpr_levels()
             }
 
+    except Exception:
+        pass
+
+
 # --- TSL levels & Real Profit table (auto) ---
 try:
     import streamlit as st, pandas as pd
@@ -793,30 +797,40 @@ try:
                                 base_step = 6.0
                             else:
                                 base_step = 10.0
-                            # ATR scaling: widen step in high-volatility sessions (factor hardcoded = 0.4)
-                            try:
-                                atr_val = float(self.get_price and 0 or 0)  # placeholder
-                            except Exception:
-                                atr_val = None
-                            try:
-                                # try to get ATR from indicator engine if available in session_state
-                                import streamlit as st
-                                eng = st.session_state.get('indicator_engine', None)
-                                if eng is not None:
-                                    atr_val = eng.atr() or atr_val
-                            except Exception:
-                                pass
-                            try:
-                                if atr_val is not None:
-                                    atr_scaled = float(atr_val) * 0.4
-                                    step = max(base_step, atr_scaled)
-                                else:
-                                    step = base_step
-                            except Exception:
-                                step = base_step
-        # apply trailing using selected step
-        if p.get("side", "BUY").upper() == "BUY":
-            new_sl = p.get("highest_price", mprice) - step
+                            
+# 
+# select base_step based on profit tiers (hardcoded)
+if profit_per_lot < 20.0:
+    base_step = 3.0
+elif profit_per_lot < 30.0:
+    base_step = 6.0
+else:
+    base_step = 10.0
+
+# ATR scaling: widen step in high-volatility sessions (factor hardcoded = 0.4)
+atr_val = None
+try:
+    import streamlit as st
+    eng = st.session_state.get('indicator_engine', None)
+    if eng is not None and hasattr(eng, "atr"):
+        atr_val = eng.atr()
+except Exception:
+    atr_val = None
+
+if atr_val is not None:
+    try:
+        atr_scaled = float(atr_val) * 0.4
+        step = max(base_step, atr_scaled)
+    except Exception:
+        step = base_step
+else:
+    step = base_step
+
+    else:
+        step = base_step
+except Exception:
+    step = base_step
+new_sl = p.get("highest_price", mprice) - step
             if new_sl > p.get("sl_price", -1e9):
                 p["sl_price"] = new_sl
         else:
