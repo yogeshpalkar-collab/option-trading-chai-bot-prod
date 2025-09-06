@@ -1,7 +1,7 @@
-
 streamlit==1.37.0
 pandas
 numpy
 smartapi-python==1.5.5
 pyotp
+logzero
 websocket-client
